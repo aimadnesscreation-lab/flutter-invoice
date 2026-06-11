@@ -1,0 +1,86 @@
+name: invoice_pro
+description: "Invoice Pro - Professional Offline Invoice & Business Management App"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.12.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+
+  # State Management
+  flutter_riverpod: ^2.6.1
+  riverpod_annotation: ^2.6.1
+
+  # Database
+  drift: ^2.25.1
+  sqlite3_flutter_libs: ^0.5.28
+  sqlite3: ^2.7.4
+  sqlcipher_flutter_libs: ^0.6.0
+
+  # Dependency Injection
+  get_it: ^8.0.3
+
+  # Navigation
+  go_router: ^14.8.1
+
+  # PDF
+  pdf: ^3.11.2
+  printing: ^5.14.2
+
+  # Charts
+  fl_chart: ^0.70.2
+
+  # Local Security
+  flutter_secure_storage: ^9.2.4
+  local_auth: ^2.3.0
+
+  # Barcode
+  mobile_scanner: ^6.0.6
+  barcode: ^2.2.8
+
+  # File Export/Import
+  file_picker: ^8.1.7
+  path_provider: ^2.1.5
+  open_file: ^3.5.10
+  share_plus: ^10.1.4
+  path: ^1.9.0
+  csv: ^6.0.0
+  excel: ^4.0.6
+
+  # Utilities
+  intl: ^0.20.2
+  uuid: ^4.5.1
+  collection: ^1.19.1
+  equatable: ^2.0.7
+  freezed_annotation: ^3.0.0
+  json_annotation: ^4.9.0
+  logger: ^2.5.0
+  encrypt: ^5.0.3
+  flutter_local_notifications: ^18.0.1
+  timeago: ^3.7.0
+  shimmer: ^3.0.0
+  flutter_slidable: ^3.1.1
+  fluttertoast: ^8.2.10
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  integration_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  drift_dev: ^2.25.2
+  build_runner: ^2.4.14
+  freezed: ^3.0.4
+  json_serializable: ^6.9.4
+  riverpod_generator: ^2.6.3
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/images/
+    - assets/fonts/
