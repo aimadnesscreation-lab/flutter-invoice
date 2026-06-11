@@ -8,6 +8,8 @@ import 'package:invoice_pro/domain/entities/payment.dart';
 import 'package:invoice_pro/domain/entities/expense.dart';
 import 'package:invoice_pro/domain/entities/estimate.dart';
 import 'package:invoice_pro/domain/entities/supplier.dart';
+import 'package:invoice_pro/domain/entities/credit_note.dart';
+import 'package:invoice_pro/domain/entities/audit_log.dart';
 import 'package:invoice_pro/domain/repositories/audit_log_repository.dart';
 import 'package:invoice_pro/domain/repositories/trash_repository.dart';
 import 'package:invoice_pro/domain/repositories/business_repository.dart';

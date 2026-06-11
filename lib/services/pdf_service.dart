@@ -1,9 +1,7 @@
 import 'dart:typed_data';
-import 'dart:io';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:invoice_pro/domain/entities/invoice.dart';
 import 'package:invoice_pro/domain/entities/business.dart';
 import 'package:invoice_pro/core/utils/helpers.dart';

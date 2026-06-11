@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:drift/drift.dart' hide Column;
-import 'package:invoice_pro/core/di/injection_container.dart';
-import 'package:invoice_pro/database/app_database.dart';
+import 'package:invoice_pro/core/di/providers.dart';
 import 'package:invoice_pro/core/utils/helpers.dart';
 
 class RecycleBinPage extends ConsumerStatefulWidget {
@@ -31,7 +29,7 @@ class _RecycleBinPageState extends ConsumerState<RecycleBinPage> {
                   )
                 : const SizedBox(),
             loading: () => const SizedBox(),
-            error: (_, __) => const SizedBox(),
+            error: (err, stack) => const SizedBox(),
           ),
         ],
       ),

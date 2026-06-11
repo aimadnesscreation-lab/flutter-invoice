@@ -6,6 +6,7 @@ import 'package:invoice_pro/core/di/injection_container.dart';
 import 'package:invoice_pro/core/utils/helpers.dart';
 import 'package:invoice_pro/presentation/widgets/status_badge.dart';
 import 'package:invoice_pro/services/pdf_service.dart';
+import 'package:invoice_pro/domain/entities/invoice.dart';
 import 'package:uuid/uuid.dart';
 
 class InvoiceDetailPage extends ConsumerWidget {

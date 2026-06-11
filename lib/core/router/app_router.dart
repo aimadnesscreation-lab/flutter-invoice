@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:invoice_pro/presentation/pages/dashboard/dashboard_page.dart';
 import 'package:invoice_pro/presentation/pages/customers/customers_page.dart';
 import 'package:invoice_pro/presentation/pages/customers/customer_detail_page.dart';
@@ -31,8 +32,7 @@ import 'package:invoice_pro/presentation/pages/settings/recurring_invoices_page.
 import 'package:invoice_pro/presentation/widgets/app_shell.dart';
 import 'package:invoice_pro/presentation/pages/auth/pin_lock_screen.dart';
 
-import 'dart:async';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+final GlobalKey<NavigatorState> _rootNavigatorKey = GlobalKey<NavigatorState>();
 
 final routerProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authProvider);
@@ -58,12 +58,203 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       ShellRoute(
         builder: (context, state, child) => AppShell(child: child),
-...
+        routes: [
+          GoRoute(
+            path: '/',
+            name: 'dashboard',
+            builder: (context, state) => const DashboardPage(),
+          ),
+          GoRoute(
+            path: '/customers',
+            name: 'customers',
+            builder: (context, state) => const CustomersPage(),
+            routes: [
+              GoRoute(
+                path: ':id',
+                name: 'customerDetail',
+                builder: (context, state) => CustomerDetailPage(
+                  customerId: state.pathParameters['id']!,
+                ),
+              ),
+            ],
+          ),
+          GoRoute(
+            path: '/products',
+            name: 'products',
+            builder: (context, state) => const ProductsPage(),
+            routes: [
+              GoRoute(
+                path: ':id',
+                name: 'productDetail',
+                builder: (context, state) => ProductDetailPage(
+                  productId: state.pathParameters['id']!,
+                ),
+              ),
+            ],
+          ),
+          GoRoute(
+            path: '/invoices',
+            name: 'invoices',
+            builder: (context, state) => const InvoicesPage(),
+            routes: [
+              GoRoute(
+                path: 'create',
+                name: 'invoiceCreate',
+                builder: (context, state) => const InvoiceFormPage(),
+              ),
+              GoRoute(
+                path: ':id',
+                name: 'invoiceDetail',
+                builder: (context, state) => InvoiceDetailPage(
+                  invoiceId: state.pathParameters['id']!,
+                ),
+              ),
+              GoRoute(
+                path: ':id/edit',
+                name: 'invoiceEdit',
+                builder: (context, state) => InvoiceFormPage(
+                  invoiceId: state.pathParameters['id'],
+                ),
+              ),
+            ],
+          ),
+          GoRoute(
+            path: '/estimates',
+            name: 'estimates',
+            builder: (context, state) => const EstimatesPage(),
+            routes: [
+              GoRoute(
+                path: 'create',
+                name: 'estimateCreate',
+                builder: (context, state) => const EstimateFormPage(),
+              ),
+              GoRoute(
+                path: ':id',
+                name: 'estimateDetail',
+                builder: (context, state) => EstimateDetailPage(
+                  estimateId: state.pathParameters['id']!,
+                ),
+              ),
+              GoRoute(
+                path: ':id/edit',
+                name: 'estimateEdit',
+                builder: (context, state) => EstimateFormPage(
+                  estimateId: state.pathParameters['id'],
+                ),
+              ),
+            ],
+          ),
+          GoRoute(
+            path: '/payments',
+            name: 'payments',
+            builder: (context, state) => const PaymentsPage(),
+          ),
+          GoRoute(
+            path: '/expenses',
+            name: 'expenses',
+            builder: (context, state) => const ExpensesPage(),
+          ),
+          GoRoute(
+            path: '/reports',
+            name: 'reports',
+            builder: (context, state) => const ReportsPage(),
+          ),
+          GoRoute(
+            path: '/settings',
+            name: 'settings',
+            builder: (context, state) => const SettingsPage(),
+            routes: [
+              GoRoute(
+                path: 'business',
+                name: 'settingsBusiness',
+                builder: (context, state) => const BusinessSettingsPage(),
+              ),
+              GoRoute(
+                path: 'security',
+                name: 'settingsSecurity',
+                builder: (context, state) => const SecuritySettingsPage(),
+              ),
+              GoRoute(
+                path: 'taxes',
+                name: 'settingsTaxes',
+                builder: (context, state) => const TaxRatesPage(),
+              ),
+              GoRoute(
+                path: 'currencies',
+                name: 'settingsCurrencies',
+                builder: (context, state) => const CurrenciesPage(),
+              ),
+              GoRoute(
+                path: 'invoices',
+                name: 'settingsInvoices',
+                builder: (context, state) => const InvoiceSettingsPage(),
+              ),
+            ],
+          ),
+          GoRoute(
+            path: '/search',
+            name: 'search',
+            builder: (context, state) => const SearchPage(),
+          ),
+          GoRoute(
+            path: '/backup',
+            name: 'backup',
+            builder: (context, state) => const BackupPage(),
+          ),
+          GoRoute(
+            path: '/credit-notes',
+            name: 'creditNotes',
+            builder: (context, state) => const CreditNotesPage(),
+          ),
+          GoRoute(
+            path: '/suppliers',
+            name: 'suppliers',
+            builder: (context, state) => const SuppliersPage(),
+          ),
+          GoRoute(
+            path: '/recycle-bin',
+            name: 'recycleBin',
+            builder: (context, state) => const RecycleBinPage(),
+          ),
+          GoRoute(
+            path: '/audit-logs',
+            name: 'auditLogs',
+            builder: (context, state) => const AuditLogsPage(),
+          ),
+          GoRoute(
+            path: '/purchase-orders',
+            name: 'purchaseOrders',
+            builder: (context, state) => const PurchaseOrdersPage(),
+            routes: [
+              GoRoute(
+                path: 'create',
+                name: 'purchaseOrderCreate',
+                builder: (context, state) => const InvoiceFormPage(isPurchaseOrder: true),
+              ),
+              GoRoute(
+                path: ':id/edit',
+                name: 'purchaseOrderEdit',
+                builder: (context, state) => InvoiceFormPage(
+                  invoiceId: state.pathParameters['id'],
+                  isPurchaseOrder: true,
+                ),
+              ),
+            ],
+          ),
+          GoRoute(
+            path: '/recurring-invoices',
+            name: 'recurringInvoices',
+            builder: (context, state) => const RecurringInvoicesPage(),
+          ),
+        ],
+      ),
+    ],
+  );
 });
 
 class RouterRefreshNotifier extends ChangeNotifier {
   RouterRefreshNotifier(Ref ref) {
-    _subscription = ref.listen(authProvider, (_, __) => notifyListeners());
+    _subscription = ref.listen(authProvider, (prev, next) => notifyListeners());
   }
 
   late final ProviderSubscription _subscription;
@@ -74,196 +265,3 @@ class RouterRefreshNotifier extends ChangeNotifier {
     super.dispose();
   }
 }
-
-      routes: [
-        GoRoute(
-          path: '/',
-          name: 'dashboard',
-          builder: (context, state) => const DashboardPage(),
-        ),
-        GoRoute(
-          path: '/customers',
-          name: 'customers',
-          builder: (context, state) => const CustomersPage(),
-          routes: [
-            GoRoute(
-              path: ':id',
-              name: 'customerDetail',
-              builder: (context, state) => CustomerDetailPage(
-                customerId: state.pathParameters['id']!,
-              ),
-            ),
-          ],
-        ),
-        GoRoute(
-          path: '/products',
-          name: 'products',
-          builder: (context, state) => const ProductsPage(),
-          routes: [
-            GoRoute(
-              path: ':id',
-              name: 'productDetail',
-              builder: (context, state) => ProductDetailPage(
-                productId: state.pathParameters['id']!,
-              ),
-            ),
-          ],
-        ),
-        GoRoute(
-          path: '/invoices',
-          name: 'invoices',
-          builder: (context, state) => const InvoicesPage(),
-          routes: [
-            GoRoute(
-              path: 'create',
-              name: 'invoiceCreate',
-              builder: (context, state) => const InvoiceFormPage(),
-            ),
-            GoRoute(
-              path: ':id',
-              name: 'invoiceDetail',
-              builder: (context, state) => InvoiceDetailPage(
-                invoiceId: state.pathParameters['id']!,
-              ),
-            ),
-            GoRoute(
-              path: ':id/edit',
-              name: 'invoiceEdit',
-              builder: (context, state) => InvoiceFormPage(
-                invoiceId: state.pathParameters['id'],
-              ),
-            ),
-          ],
-        ),
-        GoRoute(
-          path: '/estimates',
-          name: 'estimates',
-          builder: (context, state) => const EstimatesPage(),
-          routes: [
-            GoRoute(
-              path: 'create',
-              name: 'estimateCreate',
-              builder: (context, state) => const EstimateFormPage(),
-            ),
-            GoRoute(
-              path: ':id',
-              name: 'estimateDetail',
-              builder: (context, state) => EstimateDetailPage(
-                estimateId: state.pathParameters['id']!,
-              ),
-            ),
-            GoRoute(
-              path: ':id/edit',
-              name: 'estimateEdit',
-              builder: (context, state) => EstimateFormPage(
-                estimateId: state.pathParameters['id'],
-              ),
-            ),
-          ],
-        ),
-        GoRoute(
-          path: '/payments',
-          name: 'payments',
-          builder: (context, state) => const PaymentsPage(),
-        ),
-        GoRoute(
-          path: '/expenses',
-          name: 'expenses',
-          builder: (context, state) => const ExpensesPage(),
-        ),
-        GoRoute(
-          path: '/reports',
-          name: 'reports',
-          builder: (context, state) => const ReportsPage(),
-        ),
-        GoRoute(
-          path: '/settings',
-          name: 'settings',
-          builder: (context, state) => const SettingsPage(),
-          routes: [
-            GoRoute(
-              path: 'business',
-              name: 'settingsBusiness',
-              builder: (context, state) => const BusinessSettingsPage(),
-            ),
-            GoRoute(
-              path: 'security',
-              name: 'settingsSecurity',
-              builder: (context, state) => const SecuritySettingsPage(),
-            ),
-            GoRoute(
-              path: 'taxes',
-              name: 'settingsTaxes',
-              builder: (context, state) => const TaxRatesPage(),
-            ),
-            GoRoute(
-              path: 'currencies',
-              name: 'settingsCurrencies',
-              builder: (context, state) => const CurrenciesPage(),
-            ),
-            GoRoute(
-              path: 'invoices',
-              name: 'settingsInvoices',
-              builder: (context, state) => const InvoiceSettingsPage(),
-            ),
-          ],
-        ),
-        GoRoute(
-          path: '/search',
-          name: 'search',
-          builder: (context, state) => const SearchPage(),
-        ),
-        GoRoute(
-          path: '/backup',
-          name: 'backup',
-          builder: (context, state) => const BackupPage(),
-        ),
-        GoRoute(
-          path: '/credit-notes',
-          name: 'creditNotes',
-          builder: (context, state) => const CreditNotesPage(),
-        ),
-        GoRoute(
-          path: '/suppliers',
-          name: 'suppliers',
-          builder: (context, state) => const SuppliersPage(),
-        ),
-        GoRoute(
-          path: '/recycle-bin',
-          name: 'recycleBin',
-          builder: (context, state) => const RecycleBinPage(),
-        ),
-        GoRoute(
-          path: '/audit-logs',
-          name: 'auditLogs',
-          builder: (context, state) => const AuditLogsPage(),
-        ),
-        GoRoute(
-          path: '/purchase-orders',
-          name: 'purchaseOrders',
-          builder: (context, state) => const PurchaseOrdersPage(),
-          routes: [
-            GoRoute(
-              path: 'create',
-              name: 'purchaseOrderCreate',
-              builder: (context, state) => const InvoiceFormPage(isPurchaseOrder: true),
-            ),
-            GoRoute(
-              path: ':id/edit',
-              name: 'purchaseOrderEdit',
-              builder: (context, state) => InvoiceFormPage(
-                invoiceId: state.pathParameters['id'],
-                isPurchaseOrder: true,
-              ),
-            ),
-          ],
-        ),
-        GoRoute(
-          path: '/recurring-invoices',
-          name: 'recurringInvoices',
-          builder: (context, state) => const RecurringInvoicesPage(),
-        ),
-      ],
-    ),
-  ],
-);
