@@ -3,14 +3,9 @@ allprojects {
         google()
         mavenCentral()
     }
-    afterEvaluate {
-        if (project.extensions.findByName("android") != null) {
-            project.extensions.configure<com.android.build.api.dsl.CommonExtension<*, *, *, *>> {
-                compileSdk = 36
-            }
-        }
-    }
 }
+
+rootProject.extra.set("flutter.compileSdkVersion", 36)
 
 val newBuildDir: Directory =
     rootProject.layout.buildDirectory
