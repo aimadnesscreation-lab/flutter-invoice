@@ -120,6 +120,11 @@ class AppShell extends ConsumerWidget {
             onTap: () { context.pop(); context.go('/settings'); },
           ),
           _MoreMenuItem(
+            icon: Icons.shopping_cart_outlined,
+            title: 'Purchase Orders',
+            onTap: () { context.pop(); context.go('/purchase-orders'); },
+          ),
+          _MoreMenuItem(
             icon: Icons.backup_outlined,
             title: 'Backup & Restore',
             onTap: () { context.pop(); context.go('/backup'); },

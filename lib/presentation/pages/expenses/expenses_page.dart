@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:invoice_pro/core/di/providers.dart';
 import 'package:invoice_pro/core/utils/helpers.dart';
 import 'package:invoice_pro/domain/entities/expense.dart';
+import 'package:invoice_pro/presentation/widgets/shimmer_loading.dart';
 import 'package:uuid/uuid.dart';
 
 class ExpensesPage extends ConsumerStatefulWidget {
@@ -60,7 +61,7 @@ class _ExpensesPageState extends ConsumerState<ExpensesPage> {
             itemBuilder: (context, index) => _buildExpenseCard(context, filtered[index]),
           );
         },
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const ShimmerLoading(),
         error: (e, _) => Center(child: Text('Error: $e')),
       ),
       floatingActionButton: FloatingActionButton.extended(

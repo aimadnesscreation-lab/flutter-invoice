@@ -50,7 +50,7 @@ class SettingsPage extends StatelessWidget {
             icon: Icons.repeat,
             title: 'Recurring Invoices',
             subtitle: 'Manage auto-generated invoices',
-            onTap: () {},
+            onTap: () => context.go('/recurring-invoices'),
           ),
           const SizedBox(height: 24),
 

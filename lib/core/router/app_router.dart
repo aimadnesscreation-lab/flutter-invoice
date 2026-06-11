@@ -25,6 +25,8 @@ import 'package:invoice_pro/presentation/pages/credit_notes/credit_notes_page.da
 import 'package:invoice_pro/presentation/pages/suppliers/suppliers_page.dart';
 import 'package:invoice_pro/presentation/pages/recycle_bin/recycle_bin_page.dart';
 import 'package:invoice_pro/presentation/pages/audit_logs/audit_logs_page.dart';
+import 'package:invoice_pro/presentation/pages/purchase_orders/purchase_orders_page.dart';
+import 'package:invoice_pro/presentation/pages/settings/recurring_invoices_page.dart';
 import 'package:invoice_pro/presentation/widgets/app_shell.dart';
 
 final GlobalKey<NavigatorState> _rootNavigatorKey = GlobalKey<NavigatorState>();
@@ -192,6 +194,16 @@ final appRouter = GoRouter(
           path: '/audit-logs',
           name: 'auditLogs',
           builder: (context, state) => const AuditLogsPage(),
+        ),
+        GoRoute(
+          path: '/purchase-orders',
+          name: 'purchaseOrders',
+          builder: (context, state) => const PurchaseOrdersPage(),
+        ),
+        GoRoute(
+          path: '/recurring-invoices',
+          name: 'recurringInvoices',
+          builder: (context, state) => const RecurringInvoicesPage(),
         ),
       ],
     ),

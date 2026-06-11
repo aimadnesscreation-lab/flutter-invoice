@@ -4,6 +4,7 @@ import 'package:uuid/uuid.dart';
 import 'package:invoice_pro/core/di/providers.dart';
 import 'package:invoice_pro/core/utils/helpers.dart';
 import 'package:invoice_pro/domain/entities/payment.dart';
+import 'package:invoice_pro/presentation/widgets/shimmer_loading.dart';
 
 class PaymentsPage extends ConsumerStatefulWidget {
   const PaymentsPage({super.key});
@@ -42,7 +43,7 @@ class _PaymentsPageState extends ConsumerState<PaymentsPage> {
             itemBuilder: (context, index) => _buildPaymentCard(context, payments[index]),
           );
         },
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const ShimmerLoading(),
         error: (e, _) => Center(child: Text('Error: $e')),
       ),
       floatingActionButton: FloatingActionButton.extended(

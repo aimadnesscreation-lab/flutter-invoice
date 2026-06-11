@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:invoice_pro/core/di/providers.dart';
 import 'package:invoice_pro/domain/entities/customer.dart';
+import 'package:invoice_pro/presentation/widgets/shimmer_loading.dart';
 import 'package:uuid/uuid.dart';
 
 class CustomersPage extends ConsumerStatefulWidget {
@@ -86,7 +87,7 @@ class _CustomersPageState extends ConsumerState<CustomersPage> {
                       itemCount: customers.length,
                       itemBuilder: (context, index) => _buildCustomerCard(context, customers[index]),
                     ),
-              loading: () => const Center(child: CircularProgressIndicator()),
+              loading: () => const ShimmerLoading(),
               error: (e, _) => Center(child: Text('Error: $e')),
             ),
           ),

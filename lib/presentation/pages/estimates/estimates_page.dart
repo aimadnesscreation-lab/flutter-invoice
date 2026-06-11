@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:invoice_pro/core/di/providers.dart';
 import 'package:invoice_pro/core/utils/helpers.dart';
 import 'package:invoice_pro/domain/entities/estimate.dart';
+import 'package:invoice_pro/presentation/widgets/shimmer_loading.dart';
 import 'package:invoice_pro/presentation/widgets/status_badge.dart';
 
 class EstimatesPage extends ConsumerStatefulWidget {
@@ -94,7 +95,7 @@ class _EstimatesPageState extends ConsumerState<EstimatesPage> {
             ),
           );
         },
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const ShimmerLoading(),
         error: (e, _) => Center(child: Text('Error: $e')),
       ),
       floatingActionButton: FloatingActionButton.extended(

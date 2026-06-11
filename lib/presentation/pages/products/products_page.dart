@@ -4,6 +4,7 @@ import 'package:invoice_pro/core/di/providers.dart';
 import 'package:invoice_pro/core/utils/helpers.dart';
 import 'package:invoice_pro/domain/entities/product.dart';
 import 'package:invoice_pro/presentation/pages/products/barcode_scan_page.dart';
+import 'package:invoice_pro/presentation/widgets/shimmer_loading.dart';
 import 'package:invoice_pro/presentation/pages/products/product_categories_page.dart';
 import 'package:uuid/uuid.dart';
 
@@ -101,7 +102,7 @@ class _ProductsPageState extends ConsumerState<ProductsPage> {
                   itemBuilder: (context, index) => _buildProductCard(context, filtered[index], colorScheme),
                 );
               },
-              loading: () => const Center(child: CircularProgressIndicator()),
+              loading: () => const ShimmerLoading(),
               error: (e, _) => Center(child: Text('Error: $e')),
             ),
           ),

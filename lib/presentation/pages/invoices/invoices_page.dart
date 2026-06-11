@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:invoice_pro/core/di/providers.dart';
 import 'package:invoice_pro/core/utils/helpers.dart';
 import 'package:invoice_pro/domain/entities/invoice.dart';
+import 'package:invoice_pro/presentation/widgets/shimmer_loading.dart';
 import 'package:invoice_pro/presentation/widgets/status_badge.dart';
 
 class InvoicesPage extends ConsumerStatefulWidget {
@@ -91,7 +92,7 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> with SingleTickerPr
           itemBuilder: (context, index) => _buildInvoiceCard(context, filtered[index]),
         );
       },
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () => const ShimmerLoading(),
       error: (e, _) => Center(child: Text('Error: $e')),
     );
   }
