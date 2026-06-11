@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:invoice_pro/core/di/providers.dart';
 import 'package:invoice_pro/core/utils/helpers.dart';
 import 'package:invoice_pro/domain/entities/product.dart';
+import 'package:invoice_pro/presentation/pages/products/barcode_scan_page.dart';
+import 'package:invoice_pro/presentation/pages/products/product_categories_page.dart';
 import 'package:uuid/uuid.dart';
 
 class ProductsPage extends ConsumerStatefulWidget {
@@ -35,8 +37,17 @@ class _ProductsPageState extends ConsumerState<ProductsPage> {
         actions: [
           IconButton(
             icon: const Icon(Icons.qr_code_scanner),
-            onPressed: () {},
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const BarcodeScanPage()),
+            ),
             tooltip: 'Scan Barcode',
+          ),
+          IconButton(
+            icon: const Icon(Icons.category),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const ProductCategoriesPage()),
+            ),
+            tooltip: 'Categories',
           ),
         ],
       ),
