@@ -163,7 +163,7 @@ class DashboardPage extends ConsumerWidget {
               child: BarChart(
                 BarChartData(
                   alignment: BarChartAlignment.spaceAround,
-                  maxY: (stats['yearly_revenue'] as double? ?? 1000) * 1.2,
+                  maxY: ((stats['yearly_revenue'] as double? ?? 1000) * 1.2).clamp(100, double.infinity),
                   barGroups: [
                     _makeBarData(0, 'Monthly', (stats['monthly_revenue'] as double? ?? 0), colorScheme.primary),
                     _makeBarData(1, 'Yearly', (stats['yearly_revenue'] as double? ?? 0), colorScheme.secondary),
