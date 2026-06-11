@@ -31,6 +31,7 @@ import 'package:invoice_pro/presentation/pages/purchase_orders/purchase_orders_p
 import 'package:invoice_pro/presentation/pages/settings/recurring_invoices_page.dart';
 import 'package:invoice_pro/presentation/widgets/app_shell.dart';
 import 'package:invoice_pro/presentation/pages/auth/pin_lock_screen.dart';
+import 'package:invoice_pro/core/di/providers.dart';
 
 final GlobalKey<NavigatorState> _rootNavigatorKey = GlobalKey<NavigatorState>();
 

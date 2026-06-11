@@ -26,6 +26,47 @@ import 'package:invoice_pro/domain/repositories/credit_note_repository.dart';
 import 'package:invoice_pro/domain/repositories/settings_repository.dart';
 import 'package:invoice_pro/services/security_service.dart';
 
+// ============================
+// Auth State Management
+// ============================
+
+class AuthState {
+  final bool isLocked;
+  final bool isAuthenticated;
+
+  const AuthState({
+    this.isLocked = false,
+    this.isAuthenticated = false,
+  });
+
+  AuthState copyWith({bool? isLocked, bool? isAuthenticated}) {
+    return AuthState(
+      isLocked: isLocked ?? this.isLocked,
+      isAuthenticated: isAuthenticated ?? this.isAuthenticated,
+    );
+  }
+}
+
+class AuthNotifier extends StateNotifier<AuthState> {
+  AuthNotifier() : super(const AuthState());
+
+  void lock() {
+    state = state.copyWith(isLocked: true, isAuthenticated: false);
+  }
+
+  void unlock() {
+    state = state.copyWith(isLocked: false, isAuthenticated: true);
+  }
+
+  void reset() {
+    state = const AuthState();
+  }
+}
+
+final authProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
+  return AuthNotifier();
+});
+
 // Repository providers
 final businessRepositoryProvider = Provider<BusinessRepository>((ref) => sl());
 final customerRepositoryProvider = Provider<CustomerRepository>((ref) => sl());
