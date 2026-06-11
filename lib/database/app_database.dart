@@ -4,7 +4,7 @@ import 'package:drift/native.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqlite3/open.dart';
-import 'package:sqlcipher_flutter_libs/sqlcipher.dart';
+import 'package:sqlcipher_flutter_libs/sqlcipher_flutter_libs.dart';
 
 part 'app_database.g.dart';
 
@@ -420,7 +420,7 @@ class AppDatabase extends _$AppDatabase {
 LazyDatabase _openConnection() {
   // Use sqlcipher (from sqlcipher_flutter_libs) instead of plain sqlite3
   // This provides the SQLite native library via libsqlcipher.so
-  open.overrideFor(OperatingSystem.android, openSqlcipherOnAndroid);
+  open.overrideFor(OperatingSystem.android, openCipherOnAndroid);
 
   return LazyDatabase(() async {
     final dbFolder = await getApplicationDocumentsDirectory();
