@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:invoice_pro/core/di/providers.dart';
 import 'package:invoice_pro/core/utils/helpers.dart';
+import 'package:invoice_pro/core/utils/validators.dart';
 import 'package:invoice_pro/domain/entities/expense.dart';
 import 'package:invoice_pro/presentation/widgets/shimmer_loading.dart';
 import 'package:uuid/uuid.dart';
@@ -108,6 +109,7 @@ class _ExpensesPageState extends ConsumerState<ExpensesPage> {
   }
 
   void _showExpenseForm(BuildContext context) {
+    final formKey = GlobalKey<FormState>();
     final amountController = TextEditingController();
     final notesController = TextEditingController();
     String selectedCategory = Expense.categories.first;
@@ -120,47 +122,60 @@ class _ExpensesPageState extends ConsumerState<ExpensesPage> {
           left: 16, right: 16, top: 16,
           bottom: MediaQuery.of(context).viewInsets.bottom + 16,
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('Add Expense', style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 16),
-            DropdownButtonFormField<String>(
-              initialValue: selectedCategory,
-              decoration: const InputDecoration(labelText: 'Category', prefixIcon: Icon(Icons.category)),
-              items: Expense.categories.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
-              onChanged: (v) => selectedCategory = v ?? Expense.categories.first,
-            ),
-            const SizedBox(height: 12),
-            TextField(controller: amountController, decoration: const InputDecoration(labelText: 'Amount', prefixIcon: Icon(Icons.money)), keyboardType: TextInputType.number),
-            const SizedBox(height: 12),
-            TextField(controller: notesController, decoration: const InputDecoration(labelText: 'Notes', prefixIcon: Icon(Icons.notes)), maxLines: 3),
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () async {
-                  final businessId = ref.read(activeBusinessProvider)?.id ?? 'default';
-                  final repo = ref.read(expenseRepositoryProvider);
-                  final expenseNumber = await repo.generateExpenseNumber(businessId, 'EXP-');
-                  await repo.createExpense(Expense(
-                    id: const Uuid().v4(),
-                    businessId: businessId,
-                    expenseNumber: expenseNumber,
-                    category: selectedCategory,
-                    amount: double.tryParse(amountController.text) ?? 0,
-                    expenseDate: DateTime.now(),
-                    notes: notesController.text.trim().isEmpty ? null : notesController.text.trim(),
-                    createdAt: DateTime.now(),
-                    updatedAt: DateTime.now(),
-                  ));
-                  ref.invalidate(expensesProvider(businessId));
-                  if (context.mounted) Navigator.pop(context);
-                },
-                child: const Text('Add Expense'),
+        child: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Add Expense', style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                initialValue: selectedCategory,
+                decoration: const InputDecoration(labelText: 'Category', prefixIcon: Icon(Icons.category)),
+                items: Expense.categories.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+                onChanged: (v) => selectedCategory = v ?? Expense.categories.first,
               ),
-            ),
-          ],
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: amountController,
+                decoration: const InputDecoration(labelText: 'Amount *', prefixIcon: Icon(Icons.money)),
+                keyboardType: TextInputType.number,
+                validator: (v) => Validators.positiveNumber(v, fieldName: 'Amount'),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: notesController,
+                decoration: const InputDecoration(labelText: 'Notes', prefixIcon: Icon(Icons.notes)),
+                maxLines: 3,
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () async {
+                    if (!formKey.currentState!.validate()) return;
+                    final businessId = ref.read(activeBusinessProvider)?.id ?? 'default';
+                    final repo = ref.read(expenseRepositoryProvider);
+                    final expenseNumber = await repo.generateExpenseNumber(businessId, 'EXP-');
+                    await repo.createExpense(Expense(
+                      id: const Uuid().v4(),
+                      businessId: businessId,
+                      expenseNumber: expenseNumber,
+                      category: selectedCategory,
+                      amount: double.parse(amountController.text.trim()),
+                      expenseDate: DateTime.now(),
+                      notes: notesController.text.trim().isEmpty ? null : notesController.text.trim(),
+                      createdAt: DateTime.now(),
+                      updatedAt: DateTime.now(),
+                    ));
+                    ref.invalidate(expensesProvider(businessId));
+                    if (context.mounted) Navigator.pop(context);
+                  },
+                  child: const Text('Add Expense'),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

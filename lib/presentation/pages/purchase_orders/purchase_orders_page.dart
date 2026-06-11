@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:uuid/uuid.dart';
 import 'package:invoice_pro/core/di/providers.dart';
 import 'package:invoice_pro/core/utils/helpers.dart';
+import 'package:invoice_pro/core/utils/validators.dart';
 import 'package:invoice_pro/domain/entities/invoice.dart';
 
 import 'package:invoice_pro/presentation/widgets/shimmer_loading.dart';
@@ -85,6 +86,7 @@ class _PurchaseOrdersPageState extends ConsumerState<PurchaseOrdersPage> {
   }
 
   void _showCreateForm(BuildContext context) {
+    final formKey = GlobalKey<FormState>();
     final business = ref.read(activeBusinessProvider);
     final businessId = business?.id ?? 'default';
     final itemDescController = TextEditingController(text: 'Item 1');
@@ -93,6 +95,7 @@ class _PurchaseOrdersPageState extends ConsumerState<PurchaseOrdersPage> {
     final notesController = TextEditingController();
     String? selectedSupplierId;
     String? selectedSupplierName;
+    bool supplierSelected = false;
 
     showModalBottomSheet(
       context: context,
@@ -102,54 +105,66 @@ class _PurchaseOrdersPageState extends ConsumerState<PurchaseOrdersPage> {
           left: 16, right: 16, top: 16,
           bottom: MediaQuery.of(context).viewInsets.bottom + 16,
         ),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('New Purchase Order', style: Theme.of(context).textTheme.titleLarge),
-              const SizedBox(height: 16),
-              _supplierDropdown(context, (id, name) {
-                selectedSupplierId = id;
-                selectedSupplierName = name;
-              }),
-              const SizedBox(height: 12),
-              TextField(
-                controller: itemDescController,
-                decoration: const InputDecoration(labelText: 'Item Description', prefixIcon: Icon(Icons.description)),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: qtyController,
-                      decoration: const InputDecoration(labelText: 'Quantity', prefixIcon: Icon(Icons.numbers)),
-                      keyboardType: TextInputType.number,
+        child: Form(
+          key: formKey,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('New Purchase Order', style: Theme.of(context).textTheme.titleLarge),
+                const SizedBox(height: 16),
+                _supplierDropdown(context, (id, name) {
+                  selectedSupplierId = id;
+                  selectedSupplierName = name;
+                  supplierSelected = true;
+                }, formKey: formKey),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: itemDescController,
+                  decoration: const InputDecoration(labelText: 'Item Description *', prefixIcon: Icon(Icons.description)),
+                  validator: (v) => Validators.required('Item Description', v),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextFormField(
+                        controller: qtyController,
+                        decoration: const InputDecoration(labelText: 'Quantity *', prefixIcon: Icon(Icons.numbers)),
+                        keyboardType: TextInputType.number,
+                        validator: (v) => Validators.positiveNumber(v, fieldName: 'Quantity'),
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: TextField(
-                      controller: priceController,
-                      decoration: const InputDecoration(labelText: 'Unit Price', prefixIcon: Icon(Icons.money)),
-                      keyboardType: TextInputType.number,
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextFormField(
+                        controller: priceController,
+                        decoration: const InputDecoration(labelText: 'Unit Price *', prefixIcon: Icon(Icons.money)),
+                        keyboardType: TextInputType.number,
+                        validator: (v) => Validators.positiveNumber(v, fieldName: 'Unit Price'),
+                      ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: notesController,
-                decoration: const InputDecoration(labelText: 'Notes', prefixIcon: Icon(Icons.notes)),
-                maxLines: 3,
-              ),
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () async {
-                    if (selectedSupplierId == null) return;
+                  ],
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: notesController,
+                  decoration: const InputDecoration(labelText: 'Notes', prefixIcon: Icon(Icons.notes)),
+                  maxLines: 3,
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      if (!formKey.currentState!.validate()) return;
+                      if (!supplierSelected) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Please select a supplier')),
+                        );
+                        return;
+                      }
                     final prefix = business?.purchaseOrderPrefix ?? 'PO-';
                     final num = await ref.read(invoiceRepositoryProvider).generateInvoiceNumber(businessId, prefix);
                     final qty = double.tryParse(qtyController.text) ?? 1;
@@ -192,10 +207,11 @@ class _PurchaseOrdersPageState extends ConsumerState<PurchaseOrdersPage> {
           ),
         ),
       ),
+    ),
     );
   }
 
-  Widget _supplierDropdown(BuildContext context, Function(String, String?) onSelected) {
+  Widget _supplierDropdown(BuildContext context, Function(String, String?) onSelected, {GlobalKey<FormState>? formKey}) {
     final businessId = ref.read(activeBusinessProvider)?.id ?? 'default';
     final suppliersAsync = ref.watch(suppliersProvider(businessId));
 
@@ -206,7 +222,9 @@ class _PurchaseOrdersPageState extends ConsumerState<PurchaseOrdersPage> {
         onChanged: (id) {
           final supplier = suppliers.where((s) => s.id == id).firstOrNull;
           onSelected(id ?? '', supplier?.name);
+          formKey?.currentState?.validate();
         },
+        validator: (v) => Validators.required('Supplier', v),
       ),
       loading: () => const LinearProgressIndicator(),
       error: (e, _) => Text('Error: $e'),

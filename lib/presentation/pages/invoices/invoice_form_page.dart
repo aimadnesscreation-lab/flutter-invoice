@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import 'package:invoice_pro/core/di/providers.dart';
 import 'package:invoice_pro/core/utils/helpers.dart';
+import 'package:invoice_pro/core/utils/validators.dart';
 import 'package:invoice_pro/domain/entities/invoice.dart';
 import 'package:invoice_pro/domain/entities/product.dart';
 
@@ -103,7 +104,7 @@ class _InvoiceFormPageState extends ConsumerState<InvoiceFormPage> {
               customersAsync.when(
                 data: (customers) => DropdownButtonFormField<String>(
                   initialValue: _selectedCustomerId,
-                  decoration: const InputDecoration(labelText: 'Customer', prefixIcon: Icon(Icons.person)),
+                  decoration: const InputDecoration(labelText: 'Customer *', prefixIcon: Icon(Icons.person)),
                   items: customers.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))).toList(),
                   onChanged: (id) {
                     setState(() {
@@ -111,6 +112,7 @@ class _InvoiceFormPageState extends ConsumerState<InvoiceFormPage> {
                       _selectedCustomerName = customers.where((c) => c.id == id).firstOrNull?.name;
                     });
                   },
+                  validator: (v) => Validators.required('Customer', v),
                 ),
                 loading: () => const LinearProgressIndicator(),
                 error: (e, _) => Text('Error: $e'),
@@ -177,18 +179,32 @@ class _InvoiceFormPageState extends ConsumerState<InvoiceFormPage> {
               Row(
                 children: [
                   Expanded(
-                    child: TextField(
+                    child: TextFormField(
                       decoration: const InputDecoration(labelText: 'Discount %', prefixIcon: Icon(Icons.discount), suffixText: '%'),
                       keyboardType: TextInputType.number,
+                      initialValue: _discountPercent > 0 ? _discountPercent.toString() : '',
                       onChanged: (v) => setState(() => _discountPercent = double.tryParse(v) ?? 0),
+                      validator: (v) {
+                        if (v != null && v.trim().isNotEmpty && double.tryParse(v.trim()) == null) {
+                          return 'Enter a valid number';
+                        }
+                        return null;
+                      },
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: TextField(
+                    child: TextFormField(
                       decoration: const InputDecoration(labelText: 'Tax %', prefixIcon: Icon(Icons.receipt), suffixText: '%'),
                       keyboardType: TextInputType.number,
+                      initialValue: _taxPercent > 0 ? _taxPercent.toString() : '',
                       onChanged: (v) => setState(() => _taxPercent = double.tryParse(v) ?? 0),
+                      validator: (v) {
+                        if (v != null && v.trim().isNotEmpty && double.tryParse(v.trim()) == null) {
+                          return 'Enter a valid number';
+                        }
+                        return null;
+                      },
                     ),
                   ),
                 ],
@@ -197,7 +213,7 @@ class _InvoiceFormPageState extends ConsumerState<InvoiceFormPage> {
               const SizedBox(height: 16),
 
               // Notes
-              TextField(
+              TextFormField(
                 controller: _noteController,
                 decoration: const InputDecoration(labelText: 'Notes', prefixIcon: Icon(Icons.notes)),
                 maxLines: 3,
@@ -390,6 +406,7 @@ class _InvoiceFormPageState extends ConsumerState<InvoiceFormPage> {
   bool get _isFormValid => _selectedCustomerId != null && _items.isNotEmpty;
 
   void _saveInvoice() async {
+    if (!_formKey.currentState!.validate()) return;
     if (!_isFormValid) return;
 
     setState(() => _isLoading = true);

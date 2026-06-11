@@ -193,26 +193,40 @@ class _EstimateFormPageState extends ConsumerState<EstimateFormPage> {
               Row(
                 children: [
                   Expanded(
-                    child: TextField(
+                    child: TextFormField(
                       decoration: const InputDecoration(
                         labelText: 'Discount %',
                         prefixIcon: Icon(Icons.discount),
                         suffixText: '%',
                       ),
                       keyboardType: TextInputType.number,
+                      initialValue: _discountPercent > 0 ? _discountPercent.toString() : '',
                       onChanged: (v) => setState(() => _discountPercent = double.tryParse(v) ?? 0),
+                      validator: (v) {
+                        if (v != null && v.trim().isNotEmpty && double.tryParse(v.trim()) == null) {
+                          return 'Enter a valid number';
+                        }
+                        return null;
+                      },
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: TextField(
+                    child: TextFormField(
                       decoration: const InputDecoration(
                         labelText: 'Tax %',
                         prefixIcon: Icon(Icons.receipt),
                         suffixText: '%',
                       ),
                       keyboardType: TextInputType.number,
+                      initialValue: _taxPercent > 0 ? _taxPercent.toString() : '',
                       onChanged: (v) => setState(() => _taxPercent = double.tryParse(v) ?? 0),
+                      validator: (v) {
+                        if (v != null && v.trim().isNotEmpty && double.tryParse(v.trim()) == null) {
+                          return 'Enter a valid number';
+                        }
+                        return null;
+                      },
                     ),
                   ),
                 ],
@@ -221,7 +235,7 @@ class _EstimateFormPageState extends ConsumerState<EstimateFormPage> {
               const SizedBox(height: 16),
 
               // Notes
-              TextField(
+              TextFormField(
                 controller: _noteController,
                 decoration: const InputDecoration(labelText: 'Notes', prefixIcon: Icon(Icons.notes)),
                 maxLines: 3,
@@ -229,7 +243,7 @@ class _EstimateFormPageState extends ConsumerState<EstimateFormPage> {
               const SizedBox(height: 12),
 
               // Terms & Conditions
-              TextField(
+              TextFormField(
                 controller: _termsController,
                 decoration: const InputDecoration(labelText: 'Terms & Conditions', prefixIcon: Icon(Icons.description)),
                 maxLines: 3,

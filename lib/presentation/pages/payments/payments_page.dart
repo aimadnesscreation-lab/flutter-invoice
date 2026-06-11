@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import 'package:invoice_pro/core/di/providers.dart';
 import 'package:invoice_pro/core/utils/helpers.dart';
+import 'package:invoice_pro/core/utils/validators.dart';
 import 'package:invoice_pro/domain/entities/payment.dart';
 import 'package:invoice_pro/presentation/widgets/shimmer_loading.dart';
 
@@ -85,6 +86,7 @@ class _PaymentsPageState extends ConsumerState<PaymentsPage> {
   }
 
   void _showPaymentDialog(BuildContext context) {
+    final formKey = GlobalKey<FormState>();
     final amountController = TextEditingController();
     String selectedMethod = 'cash';
     final refController = TextEditingController();
@@ -100,54 +102,57 @@ class _PaymentsPageState extends ConsumerState<PaymentsPage> {
             left: 16, right: 16, top: 16,
             bottom: MediaQuery.of(context).viewInsets.bottom + 16,
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('Record Payment', style: Theme.of(context).textTheme.titleLarge),
-              const SizedBox(height: 16),
-              TextField(
-                controller: amountController,
-                decoration: const InputDecoration(labelText: 'Amount', prefixIcon: Icon(Icons.money)),
-                keyboardType: TextInputType.number,
-              ),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
-                initialValue: selectedMethod,
-                decoration: const InputDecoration(labelText: 'Method', prefixIcon: Icon(Icons.payment)),
-                items: const [
-                  DropdownMenuItem(value: 'cash', child: Text('Cash')),
-                  DropdownMenuItem(value: 'bank_transfer', child: Text('Bank Transfer')),
-                  DropdownMenuItem(value: 'credit_card', child: Text('Credit Card')),
-                  DropdownMenuItem(value: 'debit_card', child: Text('Debit Card')),
-                  DropdownMenuItem(value: 'mobile_wallet', child: Text('Mobile Wallet')),
-                ],
-                onChanged: (v) => setDialogState(() => selectedMethod = v ?? 'cash'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: refController,
-                decoration: const InputDecoration(labelText: 'Reference', prefixIcon: Icon(Icons.bookmark)),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: notesController,
-                decoration: const InputDecoration(labelText: 'Notes', prefixIcon: Icon(Icons.notes)),
-                maxLines: 2,
-              ),
-              const SizedBox(height: 12),
-              SwitchListTile(
-                title: const Text('Is Refund'),
-                value: isRefund,
-                onChanged: (v) => setDialogState(() => isRefund = v),
-                contentPadding: EdgeInsets.zero,
-              ),
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () async {
-                    final amount = double.tryParse(amountController.text);
-                    if (amount == null || amount <= 0) return;
+          child: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('Record Payment', style: Theme.of(context).textTheme.titleLarge),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: amountController,
+                  decoration: const InputDecoration(labelText: 'Amount *', prefixIcon: Icon(Icons.money)),
+                  keyboardType: TextInputType.number,
+                  validator: (v) => Validators.positiveNumber(v, fieldName: 'Amount'),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  initialValue: selectedMethod,
+                  decoration: const InputDecoration(labelText: 'Method', prefixIcon: Icon(Icons.payment)),
+                  items: const [
+                    DropdownMenuItem(value: 'cash', child: Text('Cash')),
+                    DropdownMenuItem(value: 'bank_transfer', child: Text('Bank Transfer')),
+                    DropdownMenuItem(value: 'credit_card', child: Text('Credit Card')),
+                    DropdownMenuItem(value: 'debit_card', child: Text('Debit Card')),
+                    DropdownMenuItem(value: 'mobile_wallet', child: Text('Mobile Wallet')),
+                  ],
+                  onChanged: (v) => setDialogState(() => selectedMethod = v ?? 'cash'),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: refController,
+                  decoration: const InputDecoration(labelText: 'Reference', prefixIcon: Icon(Icons.bookmark)),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: notesController,
+                  decoration: const InputDecoration(labelText: 'Notes', prefixIcon: Icon(Icons.notes)),
+                  maxLines: 2,
+                ),
+                const SizedBox(height: 12),
+                SwitchListTile(
+                  title: const Text('Is Refund'),
+                  value: isRefund,
+                  onChanged: (v) => setDialogState(() => isRefund = v),
+                  contentPadding: EdgeInsets.zero,
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      if (!formKey.currentState!.validate()) return;
+                      final amount = double.parse(amountController.text.trim());
 
                     final business = ref.read(activeBusinessProvider);
                     final businessId = business?.id ?? '';
@@ -178,6 +183,7 @@ class _PaymentsPageState extends ConsumerState<PaymentsPage> {
           ),
         ),
       ),
+    ),
     );
   }
 }

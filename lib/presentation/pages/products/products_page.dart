@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:invoice_pro/core/di/providers.dart';
 import 'package:invoice_pro/core/utils/helpers.dart';
+import 'package:invoice_pro/core/utils/validators.dart';
 import 'package:invoice_pro/domain/entities/product.dart';
 import 'package:invoice_pro/presentation/pages/products/barcode_scan_page.dart';
 import 'package:invoice_pro/presentation/widgets/shimmer_loading.dart';
@@ -164,6 +165,7 @@ class _ProductsPageState extends ConsumerState<ProductsPage> {
   }
 
   void _showProductForm(BuildContext context, {Product? product}) {
+    final formKey = GlobalKey<FormState>();
     final business = ref.read(activeBusinessProvider);
     final businessId = business?.id ?? 'default';
     final nameController = TextEditingController(text: product?.name ?? '');
@@ -184,44 +186,79 @@ class _ProductsPageState extends ConsumerState<ProductsPage> {
           left: 16, right: 16, top: 16,
           bottom: MediaQuery.of(context).viewInsets.bottom + 16,
         ),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(product == null ? 'Add Product' : 'Edit Product', style: Theme.of(context).textTheme.titleLarge),
-              const SizedBox(height: 16),
-              TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Name *', prefixIcon: Icon(Icons.shopping_bag)), textCapitalization: TextCapitalization.words),
-              const SizedBox(height: 12),
-              TextField(controller: skuController, decoration: const InputDecoration(labelText: 'SKU', prefixIcon: Icon(Icons.tag))),
-              const SizedBox(height: 12),
-              TextField(controller: barcodeController, decoration: const InputDecoration(labelText: 'Barcode', prefixIcon: Icon(Icons.qr_code))),
-              const SizedBox(height: 12),
-              TextField(controller: descriptionController, decoration: const InputDecoration(labelText: 'Description', prefixIcon: Icon(Icons.description)), maxLines: 3),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(child: TextField(controller: costPriceController, decoration: const InputDecoration(labelText: 'Cost Price', prefixIcon: Icon(Icons.money)), keyboardType: TextInputType.number)),
-                  const SizedBox(width: 12),
-                  Expanded(child: TextField(controller: sellingPriceController, decoration: const InputDecoration(labelText: 'Selling Price', prefixIcon: Icon(Icons.attach_money)), keyboardType: TextInputType.number)),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(child: TextField(controller: quantityController, decoration: const InputDecoration(labelText: 'Quantity', prefixIcon: Icon(Icons.numbers)), keyboardType: TextInputType.number)),
-                  const SizedBox(width: 12),
-                  Expanded(child: TextField(controller: reorderLevelController, decoration: const InputDecoration(labelText: 'Reorder Level', prefixIcon: Icon(Icons.low_priority)), keyboardType: TextInputType.number)),
-                ],
-              ),
-              const SizedBox(height: 12),
-              TextField(controller: unitController, decoration: const InputDecoration(labelText: 'Unit (pcs, kg, etc.)', prefixIcon: Icon(Icons.straighten))),
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () async {
-                    if (nameController.text.trim().isEmpty) return;
+        child: Form(
+          key: formKey,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(product == null ? 'Add Product' : 'Edit Product', style: Theme.of(context).textTheme.titleLarge),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: nameController,
+                  decoration: const InputDecoration(labelText: 'Name *', prefixIcon: Icon(Icons.shopping_bag)),
+                  textCapitalization: TextCapitalization.words,
+                  validator: (v) => Validators.required('Name', v),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(controller: skuController, decoration: const InputDecoration(labelText: 'SKU', prefixIcon: Icon(Icons.tag))),
+                const SizedBox(height: 12),
+                TextFormField(controller: barcodeController, decoration: const InputDecoration(labelText: 'Barcode', prefixIcon: Icon(Icons.qr_code))),
+                const SizedBox(height: 12),
+                TextFormField(controller: descriptionController, decoration: const InputDecoration(labelText: 'Description', prefixIcon: Icon(Icons.description)), maxLines: 3),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextFormField(
+                        controller: costPriceController,
+                        decoration: const InputDecoration(labelText: 'Cost Price', prefixIcon: Icon(Icons.money)),
+                        keyboardType: TextInputType.number,
+                        validator: (v) => Validators.positiveNumber(v, fieldName: 'Cost Price'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextFormField(
+                        controller: sellingPriceController,
+                        decoration: const InputDecoration(labelText: 'Selling Price', prefixIcon: Icon(Icons.attach_money)),
+                        keyboardType: TextInputType.number,
+                        validator: (v) => Validators.positiveNumber(v, fieldName: 'Selling Price'),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextFormField(
+                        controller: quantityController,
+                        decoration: const InputDecoration(labelText: 'Quantity', prefixIcon: Icon(Icons.numbers)),
+                        keyboardType: TextInputType.number,
+                        validator: (v) => Validators.number(v, fieldName: 'Quantity'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextFormField(
+                        controller: reorderLevelController,
+                        decoration: const InputDecoration(labelText: 'Reorder Level', prefixIcon: Icon(Icons.low_priority)),
+                        keyboardType: TextInputType.number,
+                        validator: (v) => Validators.number(v, fieldName: 'Reorder Level'),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                TextFormField(controller: unitController, decoration: const InputDecoration(labelText: 'Unit (pcs, kg, etc.)', prefixIcon: Icon(Icons.straighten))),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      if (!formKey.currentState!.validate()) return;
                     final repo = ref.read(productRepositoryProvider);
                     if (product == null) {
                       await repo.createProduct(Product(
@@ -262,6 +299,7 @@ class _ProductsPageState extends ConsumerState<ProductsPage> {
           ),
         ),
       ),
+    ),
     );
   }
 

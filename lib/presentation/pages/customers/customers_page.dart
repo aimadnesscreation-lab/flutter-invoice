@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:invoice_pro/core/di/providers.dart';
+import 'package:invoice_pro/core/utils/validators.dart';
 import 'package:invoice_pro/domain/entities/customer.dart';
 import 'package:invoice_pro/presentation/widgets/shimmer_loading.dart';
 import 'package:uuid/uuid.dart';
@@ -136,6 +137,7 @@ class _CustomersPageState extends ConsumerState<CustomersPage> {
   }
 
   void _showCustomerForm(BuildContext context, {Customer? customer}) {
+    final formKey = GlobalKey<FormState>();
     final nameController = TextEditingController(text: customer?.name ?? '');
     final emailController = TextEditingController(text: customer?.email ?? '');
     final phoneController = TextEditingController(text: customer?.phone ?? '');
@@ -151,30 +153,51 @@ class _CustomersPageState extends ConsumerState<CustomersPage> {
           left: 16, right: 16, top: 16,
           bottom: MediaQuery.of(context).viewInsets.bottom + 16,
         ),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(customer == null ? 'Add Customer' : 'Edit Customer', style: Theme.of(context).textTheme.titleLarge),
+        child: Form(
+          key: formKey,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(customer == null ? 'Add Customer' : 'Edit Customer', style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 16),
-              TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Name *', prefixIcon: Icon(Icons.person)), textCapitalization: TextCapitalization.words),
+              TextFormField(
+                controller: nameController,
+                decoration: const InputDecoration(labelText: 'Name *', prefixIcon: Icon(Icons.person)),
+                textCapitalization: TextCapitalization.words,
+                validator: (v) => Validators.required('Name', v),
+              ),
               const SizedBox(height: 12),
-              TextField(controller: emailController, decoration: const InputDecoration(labelText: 'Email', prefixIcon: Icon(Icons.email)), keyboardType: TextInputType.emailAddress),
+              TextFormField(
+                controller: emailController,
+                decoration: const InputDecoration(labelText: 'Email', prefixIcon: Icon(Icons.email)),
+                keyboardType: TextInputType.emailAddress,
+                validator: (v) => Validators.email(v),
+              ),
               const SizedBox(height: 12),
-              TextField(controller: phoneController, decoration: const InputDecoration(labelText: 'Phone', prefixIcon: Icon(Icons.phone)), keyboardType: TextInputType.phone),
+              TextFormField(
+                controller: phoneController,
+                decoration: const InputDecoration(labelText: 'Phone', prefixIcon: Icon(Icons.phone)),
+                keyboardType: TextInputType.phone,
+                validator: (v) => Validators.phone(v),
+              ),
               const SizedBox(height: 12),
-              TextField(controller: addressController, decoration: const InputDecoration(labelText: 'Address', prefixIcon: Icon(Icons.location_on)), textCapitalization: TextCapitalization.words),
+              TextFormField(
+                controller: addressController,
+                decoration: const InputDecoration(labelText: 'Address', prefixIcon: Icon(Icons.location_on)),
+                textCapitalization: TextCapitalization.words,
+              ),
               const SizedBox(height: 12),
-              TextField(controller: taxNumberController, decoration: const InputDecoration(labelText: 'Tax Number', prefixIcon: Icon(Icons.numbers))),
+              TextFormField(controller: taxNumberController, decoration: const InputDecoration(labelText: 'Tax Number', prefixIcon: Icon(Icons.numbers))),
               const SizedBox(height: 12),
-              TextField(controller: notesController, decoration: const InputDecoration(labelText: 'Notes', prefixIcon: Icon(Icons.notes)), maxLines: 3),
+              TextFormField(controller: notesController, decoration: const InputDecoration(labelText: 'Notes', prefixIcon: Icon(Icons.notes)), maxLines: 3),
               const SizedBox(height: 16),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: () async {
-                    if (nameController.text.trim().isEmpty) return;
+                    if (!formKey.currentState!.validate()) return;
                     final business = ref.read(activeBusinessProvider);
                     final businessId = business?.id ?? 'default';
                     final repo = ref.read(customerRepositoryProvider);
@@ -211,6 +234,7 @@ class _CustomersPageState extends ConsumerState<CustomersPage> {
           ),
         ),
       ),
+    ),
     );
   }
 
