@@ -3,6 +3,8 @@ import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
+import 'package:sqlite3/open.dart';
+import 'package:sqlcipher_flutter_libs/sqlcipher.dart';
 
 part 'app_database.g.dart';
 
@@ -416,6 +418,10 @@ class AppDatabase extends _$AppDatabase {
 }
 
 LazyDatabase _openConnection() {
+  // Use sqlcipher (from sqlcipher_flutter_libs) instead of plain sqlite3
+  // This provides the SQLite native library via libsqlcipher.so
+  open.overrideFor(OperatingSystem.android, openSqlcipherOnAndroid);
+
   return LazyDatabase(() async {
     final dbFolder = await getApplicationDocumentsDirectory();
     final file = File(p.join(dbFolder.path, 'invoice_pro.db'));
