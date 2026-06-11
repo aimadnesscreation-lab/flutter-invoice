@@ -54,12 +54,7 @@ dependencies:
   intl: ^0.20.2
   uuid: ^4.5.1
   collection: ^1.19.1
-  equatable: ^2.0.7
-  freezed_annotation: ^3.0.0
-  json_annotation: ^4.9.0
   logger: ^2.5.0
-  encrypt: ^5.0.3
-  flutter_local_notifications: ^18.0.1
   timeago: ^3.7.0
   shimmer: ^3.0.0
   flutter_slidable: ^3.1.1
@@ -73,8 +68,6 @@ dev_dependencies:
   flutter_lints: ^6.0.0
   drift_dev: ^2.25.2
   build_runner: ^2.4.14
-  freezed: ^3.0.4
-  json_serializable: ^6.9.4
   riverpod_generator: ^2.6.3
 
 flutter:

@@ -13,8 +13,16 @@ import 'package:invoice_pro/presentation/pages/payments/payments_page.dart';
 import 'package:invoice_pro/presentation/pages/expenses/expenses_page.dart';
 import 'package:invoice_pro/presentation/pages/reports/reports_page.dart';
 import 'package:invoice_pro/presentation/pages/settings/settings_page.dart';
+import 'package:invoice_pro/presentation/pages/settings/business_settings_page.dart';
+import 'package:invoice_pro/presentation/pages/settings/security_settings_page.dart';
+import 'package:invoice_pro/presentation/pages/settings/tax_rates_page.dart';
+import 'package:invoice_pro/presentation/pages/settings/currencies_page.dart';
 import 'package:invoice_pro/presentation/pages/search/search_page.dart';
 import 'package:invoice_pro/presentation/pages/backup/backup_page.dart';
+import 'package:invoice_pro/presentation/pages/credit_notes/credit_notes_page.dart';
+import 'package:invoice_pro/presentation/pages/suppliers/suppliers_page.dart';
+import 'package:invoice_pro/presentation/pages/recycle_bin/recycle_bin_page.dart';
+import 'package:invoice_pro/presentation/pages/audit_logs/audit_logs_page.dart';
 import 'package:invoice_pro/presentation/widgets/app_shell.dart';
 
 final GlobalKey<NavigatorState> _rootNavigatorKey = GlobalKey<NavigatorState>();
@@ -109,6 +117,28 @@ final appRouter = GoRouter(
           path: '/settings',
           name: 'settings',
           builder: (context, state) => const SettingsPage(),
+          routes: [
+            GoRoute(
+              path: 'business',
+              name: 'settingsBusiness',
+              builder: (context, state) => const BusinessSettingsPage(),
+            ),
+            GoRoute(
+              path: 'security',
+              name: 'settingsSecurity',
+              builder: (context, state) => const SecuritySettingsPage(),
+            ),
+            GoRoute(
+              path: 'taxes',
+              name: 'settingsTaxes',
+              builder: (context, state) => const TaxRatesPage(),
+            ),
+            GoRoute(
+              path: 'currencies',
+              name: 'settingsCurrencies',
+              builder: (context, state) => const CurrenciesPage(),
+            ),
+          ],
         ),
         GoRoute(
           path: '/search',
@@ -119,6 +149,26 @@ final appRouter = GoRouter(
           path: '/backup',
           name: 'backup',
           builder: (context, state) => const BackupPage(),
+        ),
+        GoRoute(
+          path: '/credit-notes',
+          name: 'creditNotes',
+          builder: (context, state) => const CreditNotesPage(),
+        ),
+        GoRoute(
+          path: '/suppliers',
+          name: 'suppliers',
+          builder: (context, state) => const SuppliersPage(),
+        ),
+        GoRoute(
+          path: '/recycle-bin',
+          name: 'recycleBin',
+          builder: (context, state) => const RecycleBinPage(),
+        ),
+        GoRoute(
+          path: '/audit-logs',
+          name: 'auditLogs',
+          builder: (context, state) => const AuditLogsPage(),
         ),
       ],
     ),

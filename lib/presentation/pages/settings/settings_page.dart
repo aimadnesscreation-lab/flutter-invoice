@@ -18,21 +18,21 @@ class SettingsPage extends StatelessWidget {
             icon: Icons.business,
             title: 'Business Settings',
             subtitle: 'Manage your business details',
-            onTap: () {},
+            onTap: () => context.go('/settings/business'),
           ),
           _buildSettingTile(
             context,
             icon: Icons.currency_exchange,
             title: 'Currencies',
             subtitle: 'Manage currencies and exchange rates',
-            onTap: () {},
+            onTap: () => context.go('/settings/currencies'),
           ),
           _buildSettingTile(
             context,
             icon: Icons.receipt,
             title: 'Tax Rates',
             subtitle: 'GST, VAT, and other tax rates',
-            onTap: () {},
+            onTap: () => context.go('/settings/taxes'),
           ),
           const SizedBox(height: 24),
 
@@ -42,15 +42,8 @@ class SettingsPage extends StatelessWidget {
             context,
             icon: Icons.receipt_long,
             title: 'Invoice Settings',
-            subtitle: 'Default terms, numbering, templates',
-            onTap: () {},
-          ),
-          _buildSettingTile(
-            context,
-            icon: Icons.style,
-            title: 'Invoice Templates',
-            subtitle: 'Modern, Classic, Simple',
-            onTap: () {},
+            subtitle: 'Set numbering, defaults and templates',
+            onTap: () => context.go('/settings/business'),
           ),
           _buildSettingTile(
             context,
@@ -58,6 +51,24 @@ class SettingsPage extends StatelessWidget {
             title: 'Recurring Invoices',
             subtitle: 'Manage auto-generated invoices',
             onTap: () {},
+          ),
+          const SizedBox(height: 24),
+
+          // Business Records Section
+          _buildSectionHeader(context, 'Business Records'),
+          _buildSettingTile(
+            context,
+            icon: Icons.store,
+            title: 'Suppliers',
+            subtitle: 'Manage your suppliers and vendors',
+            onTap: () => context.go('/suppliers'),
+          ),
+          _buildSettingTile(
+            context,
+            icon: Icons.request_quote,
+            title: 'Credit Notes',
+            subtitle: 'Returns, refunds, and adjustments',
+            onTap: () => context.go('/credit-notes'),
           ),
           const SizedBox(height: 24),
 
@@ -70,13 +81,6 @@ class SettingsPage extends StatelessWidget {
             subtitle: 'Light, Dark, or System',
             onTap: () => _showThemeDialog(context),
           ),
-          _buildSettingTile(
-            context,
-            icon: Icons.format_size,
-            title: 'Number Format',
-            subtitle: 'Set number and date formats',
-            onTap: () {},
-          ),
           const SizedBox(height: 24),
 
           // Security Section
@@ -85,15 +89,8 @@ class SettingsPage extends StatelessWidget {
             context,
             icon: Icons.lock,
             title: 'App Lock',
-            subtitle: 'PIN, password, or biometric lock',
+            subtitle: 'PIN, biometric lock, and auto-lock',
             onTap: () => context.go('/settings/security'),
-          ),
-          _buildSettingTile(
-            context,
-            icon: Icons.timer,
-            title: 'Auto Lock',
-            subtitle: 'Auto-lock after inactivity',
-            onTap: () {},
           ),
           const SizedBox(height: 24),
 
@@ -111,14 +108,14 @@ class SettingsPage extends StatelessWidget {
             icon: Icons.delete_sweep,
             title: 'Recycle Bin',
             subtitle: 'View and restore deleted items',
-            onTap: () {},
+            onTap: () => context.go('/recycle-bin'),
           ),
           _buildSettingTile(
             context,
             icon: Icons.history,
             title: 'Audit Logs',
             subtitle: 'Track all changes made',
-            onTap: () {},
+            onTap: () => context.go('/audit-logs'),
           ),
           const SizedBox(height: 24),
 

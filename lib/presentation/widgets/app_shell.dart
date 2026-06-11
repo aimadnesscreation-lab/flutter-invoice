@@ -94,6 +94,16 @@ class AppShell extends StatelessWidget {
             onTap: () { context.pop(); context.go('/expenses'); },
           ),
           _MoreMenuItem(
+            icon: Icons.store_outlined,
+            title: 'Suppliers',
+            onTap: () { context.pop(); context.go('/suppliers'); },
+          ),
+          _MoreMenuItem(
+            icon: Icons.request_quote_outlined,
+            title: 'Credit Notes',
+            onTap: () { context.pop(); context.go('/credit-notes'); },
+          ),
+          _MoreMenuItem(
             icon: Icons.bar_chart_outlined,
             title: 'Reports',
             onTap: () { context.pop(); context.go('/reports'); },
@@ -112,6 +122,16 @@ class AppShell extends StatelessWidget {
             icon: Icons.backup_outlined,
             title: 'Backup & Restore',
             onTap: () { context.pop(); context.go('/backup'); },
+          ),
+          _MoreMenuItem(
+            icon: Icons.history_outlined,
+            title: 'Audit Logs',
+            onTap: () { context.pop(); context.go('/audit-logs'); },
+          ),
+          _MoreMenuItem(
+            icon: Icons.delete_sweep_outlined,
+            title: 'Recycle Bin',
+            onTap: () { context.pop(); context.go('/recycle-bin'); },
           ),
           const SizedBox(height: 16),
         ],

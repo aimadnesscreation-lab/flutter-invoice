@@ -16,6 +16,9 @@ import 'package:invoice_pro/domain/repositories/payment_repository.dart';
 import 'package:invoice_pro/domain/repositories/expense_repository.dart';
 import 'package:invoice_pro/domain/repositories/estimate_repository.dart';
 import 'package:invoice_pro/domain/repositories/supplier_repository.dart';
+import 'package:invoice_pro/domain/repositories/tax_rate_repository.dart';
+import 'package:invoice_pro/domain/repositories/currency_repository.dart';
+import 'package:invoice_pro/domain/repositories/credit_note_repository.dart';
 
 // Repository providers
 final businessRepositoryProvider = Provider<BusinessRepository>((ref) => sl());
@@ -26,6 +29,9 @@ final paymentRepositoryProvider = Provider<PaymentRepository>((ref) => sl());
 final expenseRepositoryProvider = Provider<ExpenseRepository>((ref) => sl());
 final estimateRepositoryProvider = Provider<EstimateRepository>((ref) => sl());
 final supplierRepositoryProvider = Provider<SupplierRepository>((ref) => sl());
+final taxRateRepositoryProvider = Provider<TaxRateRepository>((ref) => sl());
+final currencyRepositoryProvider = Provider<CurrencyRepository>((ref) => sl());
+final creditNoteRepositoryProvider = Provider<CreditNoteRepository>((ref) => sl());
 
 // Business providers
 final activeBusinessProvider = StateNotifierProvider<ActiveBusinessNotifier, Business?>((ref) {
