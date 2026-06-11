@@ -181,12 +181,32 @@ class ExpenseRepositoryImpl implements ExpenseRepository {
 
   @override
   Future<String> generateExpenseNumber(String businessId, String prefix) async {
-    final query = _db.selectOnly(_db.expenses)
-      ..addColumns([_db.expenses.id.count()])
-      ..where(_db.expenses.businessId.equals(businessId));
-    final count = await query.map((row) => row.read(_db.expenses.id.count())).getSingle();
-    final nextNumber = (count ?? 0) + 1;
-    return '$prefix${nextNumber.toString().padLeft(6, '0')}';
+    return await _db.transaction(() async {
+      final query = _db.select(_db.invoiceNumbering)
+        ..where((t) => t.businessId.equals(businessId))
+        ..where((t) => t.type.equals('expense'))
+        ..where((t) => t.prefix.equals(prefix));
+      
+      final existing = await query.getSingleOrNull();
+      int nextNumber = 1;
+
+      if (existing != null) {
+        nextNumber = existing.lastNumber + 1;
+        await (_db.invoiceNumbering.update()..where((t) => t.id.equals(existing.id))).write(
+          InvoiceNumberingCompanion(lastNumber: Value(nextNumber))
+        );
+      } else {
+        await _db.into(_db.invoiceNumbering).insert(InvoiceNumberingCompanion.insert(
+          id: const Uuid().v4(),
+          businessId: businessId,
+          prefix: prefix,
+          type: 'expense',
+          lastNumber: Value(nextNumber),
+        ));
+      }
+
+      return '$prefix${nextNumber.toString().padLeft(6, '0')}';
+    });
   }
 
   Map<String, dynamic> _rowToMap(Expense row) {

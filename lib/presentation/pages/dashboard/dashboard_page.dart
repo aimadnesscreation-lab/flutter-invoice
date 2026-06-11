@@ -15,7 +15,38 @@ class DashboardPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final business = ref.watch(activeBusinessProvider);
-    final businessId = business?.id ?? 'default';
+    
+    if (business == null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Dashboard')),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.business_center_outlined, size: 64, color: Theme.of(context).colorScheme.primary.withAlpha(100)),
+                const SizedBox(height: 16),
+                Text('Welcome to Invoice Pro!', style: Theme.of(context).textTheme.headlineSmall),
+                const SizedBox(height: 8),
+                const Text(
+                  'To get started, please set up your business profile. This will be used for your invoices and estimates.',
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton.icon(
+                  onPressed: () => context.go('/settings'),
+                  icon: const Icon(Icons.add),
+                  label: const Text('Set Up Business'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    final businessId = business.id;
     final colorScheme = Theme.of(context).colorScheme;
     final statsAsync = ref.watch(dashboardStatsProvider(businessId));
     final recentInvoicesAsync = ref.watch(recentInvoicesProvider(businessId));

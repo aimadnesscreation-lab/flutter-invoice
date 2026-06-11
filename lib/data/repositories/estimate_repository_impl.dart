@@ -187,12 +187,32 @@ class EstimateRepositoryImpl implements EstimateRepository {
 
   @override
   Future<String> generateEstimateNumber(String businessId, String prefix) async {
-    final query = _db.selectOnly(_db.estimates)
-      ..addColumns([_db.estimates.id.count()])
-      ..where(_db.estimates.businessId.equals(businessId));
-    final count = await query.map((row) => row.read(_db.estimates.id.count())).getSingle();
-    final nextNumber = (count ?? 0) + 1;
-    return '$prefix${nextNumber.toString().padLeft(6, '0')}';
+    return await _db.transaction(() async {
+      final query = _db.select(_db.invoiceNumbering)
+        ..where((t) => t.businessId.equals(businessId))
+        ..where((t) => t.type.equals('estimate'))
+        ..where((t) => t.prefix.equals(prefix));
+      
+      final existing = await query.getSingleOrNull();
+      int nextNumber = 1;
+
+      if (existing != null) {
+        nextNumber = existing.lastNumber + 1;
+        await (_db.invoiceNumbering.update()..where((t) => t.id.equals(existing.id))).write(
+          InvoiceNumberingCompanion(lastNumber: Value(nextNumber))
+        );
+      } else {
+        await _db.into(_db.invoiceNumbering).insert(InvoiceNumberingCompanion.insert(
+          id: const Uuid().v4(),
+          businessId: businessId,
+          prefix: prefix,
+          type: 'estimate',
+          lastNumber: Value(nextNumber),
+        ));
+      }
+
+      return '$prefix${nextNumber.toString().padLeft(6, '0')}';
+    });
   }
 
   @override
