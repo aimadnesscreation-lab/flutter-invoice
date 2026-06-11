@@ -38,7 +38,7 @@ class TrashRepositoryImpl implements TrashRepository {
 
     final rows = await (_db.deletedItems.select()
       ..where((t) => t.businessId.equals(businessId))
-      ..orderBy([OrderingTerm.desc(_db.deletedItems.deletedAt)])
+      ..orderBy([(t) => OrderingTerm.desc(t.deletedAt)])
       ..limit(pageSize, offset: offset)).get();
 
     return rows.map((row) => <String, dynamic>{

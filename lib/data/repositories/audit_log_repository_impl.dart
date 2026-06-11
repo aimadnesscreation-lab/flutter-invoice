@@ -1,6 +1,6 @@
 import 'package:drift/drift.dart';
 import 'package:uuid/uuid.dart';
-import 'package:invoice_pro/database/app_database.dart';
+import 'package:invoice_pro/database/app_database.dart' hide AuditLog;
 import 'package:invoice_pro/domain/entities/audit_log.dart';
 import 'package:invoice_pro/domain/repositories/audit_log_repository.dart';
 
@@ -35,7 +35,7 @@ class AuditLogRepositoryImpl implements AuditLogRepository {
 
     final query = _db.select(_db.auditLogs)
       ..where((t) => t.businessId.equals(businessId))
-      ..orderBy([OrderingTerm.desc(_db.auditLogs.createdAt)])
+      ..orderBy([(t) => OrderingTerm.desc(t.createdAt)])
       ..limit(pageSize, offset: offset);
 
     if (entityType != null) {
