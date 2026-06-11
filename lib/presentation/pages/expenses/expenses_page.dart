@@ -17,7 +17,9 @@ class _ExpensesPageState extends ConsumerState<ExpensesPage> {
 
   @override
   Widget build(BuildContext context) {
-    final expensesAsync = ref.watch(expensesProvider('default'));
+    final business = ref.watch(activeBusinessProvider);
+    final businessId = business?.id ?? 'default';
+    final expensesAsync = ref.watch(expensesProvider(businessId));
 
     return Scaffold(
       appBar: AppBar(
@@ -137,11 +139,12 @@ class _ExpensesPageState extends ConsumerState<ExpensesPage> {
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: () async {
+                  final businessId = ref.read(activeBusinessProvider)?.id ?? 'default';
                   final repo = ref.read(expenseRepositoryProvider);
-                  final expenseNumber = await repo.generateExpenseNumber('default', 'EXP-');
+                  final expenseNumber = await repo.generateExpenseNumber(businessId, 'EXP-');
                   await repo.createExpense(Expense(
                     id: const Uuid().v4(),
-                    businessId: 'default',
+                    businessId: businessId,
                     expenseNumber: expenseNumber,
                     category: selectedCategory,
                     amount: double.tryParse(amountController.text) ?? 0,
@@ -150,7 +153,7 @@ class _ExpensesPageState extends ConsumerState<ExpensesPage> {
                     createdAt: DateTime.now(),
                     updatedAt: DateTime.now(),
                   ));
-                  ref.invalidate(expensesProvider('default'));
+                  ref.invalidate(expensesProvider(businessId));
                   if (context.mounted) Navigator.pop(context);
                 },
                 child: const Text('Add Expense'),

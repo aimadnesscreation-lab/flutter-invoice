@@ -14,10 +14,12 @@ class DashboardPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final business = ref.watch(activeBusinessProvider);
+    final businessId = business?.id ?? 'default';
     final colorScheme = Theme.of(context).colorScheme;
-    final statsAsync = ref.watch(dashboardStatsProvider('default'));
-    final recentInvoicesAsync = ref.watch(recentInvoicesProvider('default'));
-    final customersAsync = ref.watch(customersProvider('default'));
+    final statsAsync = ref.watch(dashboardStatsProvider(businessId));
+    final recentInvoicesAsync = ref.watch(recentInvoicesProvider(businessId));
+    final customersAsync = ref.watch(customersProvider(businessId));
 
     return Scaffold(
       appBar: AppBar(
@@ -35,9 +37,9 @@ class DashboardPage extends ConsumerWidget {
       ),
       body: RefreshIndicator(
         onRefresh: () async {
-          ref.invalidate(dashboardStatsProvider('default'));
-          ref.invalidate(recentInvoicesProvider('default'));
-          ref.invalidate(customersProvider('default'));
+          ref.invalidate(dashboardStatsProvider(businessId));
+          ref.invalidate(recentInvoicesProvider(businessId));
+          ref.invalidate(customersProvider(businessId));
         },
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(16),

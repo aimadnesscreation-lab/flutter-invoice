@@ -10,7 +10,9 @@ class ProductDetailPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final productsAsync = ref.watch(productsProvider('default'));
+    final business = ref.watch(activeBusinessProvider);
+    final businessId = business?.id ?? 'default';
+    final productsAsync = ref.watch(productsProvider(businessId));
 
     return productsAsync.when(
       data: (products) {

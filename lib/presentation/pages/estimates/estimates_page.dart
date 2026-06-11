@@ -10,7 +10,9 @@ class EstimatesPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final estimatesAsync = ref.watch(estimatesProvider('default'));
+    final business = ref.watch(activeBusinessProvider);
+    final businessId = business?.id ?? 'default';
+    final estimatesAsync = ref.watch(estimatesProvider(businessId));
 
     return Scaffold(
       appBar: AppBar(

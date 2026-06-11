@@ -399,7 +399,7 @@ class InvoiceNumbering extends Table {
   ],
 )
 class AppDatabase extends _$AppDatabase {
-  AppDatabase() : super(_openConnection());
+  AppDatabase([String? password]) : super(_openConnection(password));
 
   @override
   int get schemaVersion => 1;
@@ -417,7 +417,7 @@ class AppDatabase extends _$AppDatabase {
   }
 }
 
-LazyDatabase _openConnection() {
+LazyDatabase _openConnection([String? password]) {
   // Use sqlcipher (from sqlcipher_flutter_libs) instead of plain sqlite3
   // This provides the SQLite native library via libsqlcipher.so
   open.overrideFor(OperatingSystem.android, openCipherOnAndroid);
@@ -425,6 +425,13 @@ LazyDatabase _openConnection() {
   return LazyDatabase(() async {
     final dbFolder = await getApplicationDocumentsDirectory();
     final file = File(p.join(dbFolder.path, 'invoice_pro.db'));
-    return NativeDatabase(file);
+    return NativeDatabase(
+      file,
+      setup: (rawDb) {
+        if (password != null) {
+          rawDb.execute("PRAGMA key = '$password';");
+        }
+      },
+    );
   });
 }

@@ -61,7 +61,9 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> with SingleTickerPr
   }
 
   Widget _buildInvoiceList(String? status) {
-    final invoicesAsync = ref.watch(invoicesProvider('default'));
+    final business = ref.watch(activeBusinessProvider);
+    final businessId = business?.id ?? 'default';
+    final invoicesAsync = ref.watch(invoicesProvider(businessId));
 
     return invoicesAsync.when(
       data: (invoices) {

@@ -23,9 +23,11 @@ class _SearchPageState extends ConsumerState<SearchPage> {
 
   @override
   Widget build(BuildContext context) {
-    final invoicesAsync = ref.watch(invoicesProvider('default'));
-    final customersAsync = ref.watch(customersProvider('default'));
-    final productsAsync = ref.watch(productsProvider('default'));
+    final business = ref.watch(activeBusinessProvider);
+    final businessId = business?.id ?? 'default';
+    final invoicesAsync = ref.watch(invoicesProvider(businessId));
+    final customersAsync = ref.watch(customersProvider(businessId));
+    final productsAsync = ref.watch(productsProvider(businessId));
 
     return Scaffold(
       appBar: AppBar(

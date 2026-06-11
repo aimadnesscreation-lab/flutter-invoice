@@ -24,11 +24,13 @@ class _CustomersPageState extends ConsumerState<CustomersPage> {
 
   @override
   Widget build(BuildContext context) {
+    final business = ref.watch(activeBusinessProvider);
+    final businessId = business?.id ?? 'default';
     final colorScheme = Theme.of(context).colorScheme;
     final customersAsync = ref.watch(
       _searchQuery.isEmpty
-          ? customersProvider('default')
-          : customerSearchProvider({'businessId': 'default', 'query': _searchQuery}),
+          ? customersProvider(businessId)
+          : customerSearchProvider({'businessId': businessId, 'query': _searchQuery}),
     );
 
     return Scaffold(
@@ -172,11 +174,13 @@ class _CustomersPageState extends ConsumerState<CustomersPage> {
                 child: ElevatedButton(
                   onPressed: () async {
                     if (nameController.text.trim().isEmpty) return;
+                    final business = ref.read(activeBusinessProvider);
+                    final businessId = business?.id ?? 'default';
                     final repo = ref.read(customerRepositoryProvider);
                     if (customer == null) {
                       await repo.createCustomer(Customer(
                         id: const Uuid().v4(),
-                        businessId: 'default',
+                        businessId: businessId,
                         name: nameController.text.trim(),
                         email: emailController.text.trim().isEmpty ? null : emailController.text.trim(),
                         phone: phoneController.text.trim().isEmpty ? null : phoneController.text.trim(),
@@ -196,7 +200,7 @@ class _CustomersPageState extends ConsumerState<CustomersPage> {
                         notes: notesController.text.trim().isEmpty ? null : notesController.text.trim(),
                       ));
                     }
-                    ref.invalidate(customersProvider('default'));
+                    ref.invalidate(customersProvider(businessId));
                     if (context.mounted) Navigator.pop(context);
                   },
                   child: Text(customer == null ? 'Create Customer' : 'Update Customer'),
@@ -219,8 +223,9 @@ class _CustomersPageState extends ConsumerState<CustomersPage> {
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
           TextButton(
             onPressed: () async {
+              final businessId = ref.read(activeBusinessProvider)?.id ?? 'default';
               await ref.read(customerRepositoryProvider).deleteCustomer(customer.id);
-              ref.invalidate(customersProvider('default'));
+              ref.invalidate(customersProvider(businessId));
               if (context.mounted) Navigator.pop(context);
             },
             child: const Text('Delete', style: TextStyle(color: Colors.red)),

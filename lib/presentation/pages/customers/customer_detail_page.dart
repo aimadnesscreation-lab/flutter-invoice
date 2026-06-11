@@ -10,8 +10,10 @@ class CustomerDetailPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final business = ref.watch(activeBusinessProvider);
+    final businessId = business?.id ?? 'default';
     final colorScheme = Theme.of(context).colorScheme;
-    final customersAsync = ref.watch(customersProvider('default'));
+    final customersAsync = ref.watch(customersProvider(businessId));
 
     return customersAsync.when(
       data: (customers) {

@@ -31,14 +31,17 @@ import 'package:invoice_pro/services/security_service.dart';
 final sl = GetIt.instance;
 
 Future<void> initDependencies() async {
+  // Services
+  final securityService = SecurityService();
+  sl.registerLazySingleton<SecurityService>(() => securityService);
+  sl.registerLazySingleton<PdfService>(() => PdfService());
+
   // Database
-  final database = AppDatabase();
+  final dbKey = await securityService.getDatabaseKey();
+  final database = AppDatabase(dbKey);
   sl.registerLazySingleton<AppDatabase>(() => database);
 
-  // Services
-  sl.registerLazySingleton<PdfService>(() => PdfService());
   sl.registerLazySingleton<BackupService>(() => BackupService(sl<AppDatabase>()));
-  sl.registerLazySingleton<SecurityService>(() => SecurityService());
 
   // Repositories
   sl.registerLazySingleton<BusinessRepository>(() => BusinessRepositoryImpl(sl<AppDatabase>()));

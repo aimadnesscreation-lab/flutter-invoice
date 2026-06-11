@@ -13,247 +13,257 @@ class InvoiceRepositoryImpl implements InvoiceRepository {
   @override
   Future<List<domain.Invoice>> getAllInvoices(String businessId, {String? status, String? searchQuery, int page = 1, int pageSize = 20}) async {
     final offset = (page - 1) * pageSize;
-    var allRows = await (_db.invoices.select()
-      ..where((t) => t.businessId.equals(businessId))
-      ..where((t) => t.deletedAt.isNull())).get();
-    var rows = allRows;
+    
+    final query = _db.select(_db.invoices).join([
+      leftOuterJoin(_db.customers, _db.customers.id.equalsExp(_db.invoices.customerId)),
+      leftOuterJoin(_db.suppliers, _db.suppliers.id.equalsExp(_db.invoices.supplierId)),
+    ])
+      ..where(_db.invoices.businessId.equals(businessId))
+      ..where(_db.invoices.deletedAt.isNull());
 
     if (status != null) {
-      rows = rows.where((r) => r.status == status).toList();
+      query.where(_db.invoices.status.equals(status));
     }
     if (searchQuery != null && searchQuery.isNotEmpty) {
-      final query = searchQuery.toLowerCase();
-      rows = rows.where((r) =>
-        r.invoiceNumber.toLowerCase().contains(query)
-      ).toList();
+      query.where(_db.invoices.invoiceNumber.contains(searchQuery));
     }
 
-    rows.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-    final paged = rows.skip(offset).take(pageSize).toList();
+    query.orderBy([OrderingTerm.desc(_db.invoices.createdAt)]);
+    query.limit(pageSize, offset: offset);
 
-    final result = <domain.Invoice>[];
-    for (final row in paged) {
-      final items = await _getInvoiceItems(row.id);
-      result.add(await _toEntity(row, items: items));
+    final rows = await query.get();
+    if (rows.isEmpty) {
+      return [];
     }
-    return result;
+
+    final invoiceIds = rows.map((r) => r.readTable(_db.invoices).id).toList();
+    
+    // Fetch all items for these invoices in one query
+    final itemRows = await (_db.select(_db.invoiceItems).join([
+      leftOuterJoin(_db.products, _db.products.id.equalsExp(_db.invoiceItems.productId)),
+    ])..where(_db.invoiceItems.invoiceId.isIn(invoiceIds))).get();
+
+    final itemsMap = <String, List<domain.InvoiceItem>>{};
+    for (final row in itemRows) {
+      final item = row.readTable(_db.invoiceItems);
+      final product = row.readTableOrNull(_db.products);
+      
+      final itemMap = _itemRowToMap(item);
+      if (product != null) {
+        itemMap['product_name'] = product.name;
+      }
+      
+      final entity = InvoiceItemModel.fromMap(itemMap).toEntity();
+      itemsMap.putIfAbsent(item.invoiceId, () => []).add(entity);
+    }
+
+    return rows.map((row) {
+      final invoice = row.readTable(_db.invoices);
+      final customer = row.readTableOrNull(_db.customers);
+      final supplier = row.readTableOrNull(_db.suppliers);
+      
+      final map = _rowToMap(invoice);
+      if (customer != null) {
+        map['customer_name'] = customer.name;
+      }
+      if (supplier != null) {
+        map['supplier_name'] = supplier.name;
+      }
+      
+      return InvoiceModel.fromMap(map).toEntity().copyWith(
+        items: itemsMap[invoice.id] ?? [],
+      );
+    }).toList();
   }
 
   @override
   Future<domain.Invoice?> getInvoiceById(String id) async {
-    final row = await (_db.invoices.select()
-      ..where((t) => t.id.equals(id))).getSingleOrNull();
-    if (row == null) return null;
-    final items = await _getInvoiceItems(row.id);
-    return _toEntity(row, items: items);
+    final query = _db.select(_db.invoices).join([
+      leftOuterJoin(_db.customers, _db.customers.id.equalsExp(_db.invoices.customerId)),
+      leftOuterJoin(_db.suppliers, _db.suppliers.id.equalsExp(_db.invoices.supplierId)),
+    ])..where(_db.invoices.id.equals(id));
+
+    final row = await query.getSingleOrNull();
+    if (row == null) {
+      return null;
+    }
+
+    final invoice = row.readTable(_db.invoices);
+    final customer = row.readTableOrNull(_db.customers);
+    final supplier = row.readTableOrNull(_db.suppliers);
+
+    final items = await _getInvoiceItems(invoice.id);
+    
+    final map = _rowToMap(invoice);
+    if (customer != null) {
+      map['customer_name'] = customer.name;
+    }
+    if (supplier != null) {
+      map['supplier_name'] = supplier.name;
+    }
+    
+    return InvoiceModel.fromMap(map).toEntity().copyWith(items: items);
   }
 
   @override
   Future<domain.Invoice> createInvoice(domain.Invoice invoice, List<domain.InvoiceItem> items) async {
     final id = const Uuid().v4();
     final now = DateTime.now();
-    final model = InvoiceModel(
-      id: id,
-      businessId: invoice.businessId,
-      customerId: invoice.customerId,
-      customerName: invoice.customerName,
-      invoiceNumber: invoice.invoiceNumber,
-      status: invoice.status,
-      invoiceDate: invoice.invoiceDate,
-      dueDate: invoice.dueDate,
-      subtotal: invoice.subtotal,
-      discountPercent: invoice.discountPercent,
-      discountAmount: invoice.discountAmount,
-      taxPercent: invoice.taxPercent,
-      taxAmount: invoice.taxAmount,
-      grandTotal: invoice.grandTotal,
-      paidAmount: invoice.paidAmount,
-      balanceDue: invoice.balanceDue,
-      currency: invoice.currency,
-      currencySymbol: invoice.currencySymbol,
-      exchangeRate: invoice.exchangeRate,
-      notes: invoice.notes,
-      termsAndConditions: invoice.termsAndConditions,
-      templateStyle: invoice.templateStyle,
-      isRecurring: invoice.isRecurring,
-      recurringInterval: invoice.recurringInterval,
-      recurringNextDate: invoice.recurringNextDate,
-      recurringEndDate: invoice.recurringEndDate,
-      isPurchaseOrder: invoice.isPurchaseOrder,
-      supplierId: invoice.supplierId,
-      supplierName: invoice.supplierName,
-      createdAt: now,
-      updatedAt: now,
-    );
-    await _db.into(_db.invoices).insert(InvoicesCompanion.insert(
-      id: model.id,
-      businessId: model.businessId,
-      customerId: Value(model.customerId),
-      invoiceNumber: model.invoiceNumber,
-      status: Value(model.status),
-      invoiceDate: model.invoiceDate.millisecondsSinceEpoch,
-      dueDate: model.dueDate.millisecondsSinceEpoch,
-      subtotal: Value(model.subtotal),
-      discountPercent: Value(model.discountPercent),
-      discountAmount: Value(model.discountAmount),
-      taxPercent: Value(model.taxPercent),
-      taxAmount: Value(model.taxAmount),
-      grandTotal: Value(model.grandTotal),
-      paidAmount: Value(model.paidAmount),
-      balanceDue: Value(model.balanceDue),
-      currency: Value(model.currency),
-      currencySymbol: Value(model.currencySymbol),
-      exchangeRate: Value(model.exchangeRate),
-      notes: Value(model.notes),
-      termsAndConditions: Value(model.termsAndConditions),
-      templateStyle: Value(model.templateStyle),
-      isRecurring: Value(model.isRecurring),
-      recurringInterval: Value(model.recurringInterval),
-      recurringNextDate: Value(model.recurringNextDate?.millisecondsSinceEpoch),
-      recurringEndDate: Value(model.recurringEndDate?.millisecondsSinceEpoch),
-      isPurchaseOrder: Value(model.isPurchaseOrder),
-      supplierId: Value(model.supplierId),
-      createdAt: model.createdAt.millisecondsSinceEpoch,
-      updatedAt: model.updatedAt.millisecondsSinceEpoch,
-    ));
-
-    for (final item in items) {
-      final itemModel = InvoiceItemModel(
-        id: const Uuid().v4(),
-        invoiceId: id,
-        productId: item.productId,
-        productName: item.productName,
-        description: item.description,
-        quantity: item.quantity,
-        unitPrice: item.unitPrice,
-        discountPercent: item.discountPercent,
-        discountAmount: item.discountAmount,
-        taxPercent: item.taxPercent,
-        taxAmount: item.taxAmount,
-        subtotal: item.subtotal,
-      );
-      await _db.into(_db.invoiceItems).insert(InvoiceItemsCompanion.insert(
-        id: itemModel.id,
-        invoiceId: itemModel.invoiceId,
-        productId: Value(itemModel.productId),
-        description: itemModel.description,
-        quantity: Value(itemModel.quantity),
-        unitPrice: Value(itemModel.unitPrice),
-        discountPercent: Value(itemModel.discountPercent),
-        discountAmount: Value(itemModel.discountAmount),
-        taxPercent: Value(itemModel.taxPercent),
-        taxAmount: Value(itemModel.taxAmount),
-        subtotal: Value(itemModel.subtotal),
+    
+    return await _db.transaction(() async {
+      await _db.into(_db.invoices).insert(InvoicesCompanion.insert(
+        id: id,
+        businessId: invoice.businessId,
+        customerId: Value(invoice.customerId),
+        invoiceNumber: invoice.invoiceNumber,
+        status: Value(invoice.status),
+        invoiceDate: invoice.invoiceDate.millisecondsSinceEpoch,
+        dueDate: invoice.dueDate.millisecondsSinceEpoch,
+        subtotal: Value(invoice.subtotal),
+        discountPercent: Value(invoice.discountPercent),
+        discountAmount: Value(invoice.discountAmount),
+        taxPercent: Value(invoice.taxPercent),
+        taxAmount: Value(invoice.taxAmount),
+        grandTotal: Value(invoice.grandTotal),
+        paidAmount: Value(invoice.paidAmount),
+        balanceDue: Value(invoice.balanceDue),
+        currency: Value(invoice.currency),
+        currencySymbol: Value(invoice.currencySymbol),
+        exchangeRate: Value(invoice.exchangeRate),
+        notes: Value(invoice.notes),
+        termsAndConditions: Value(invoice.termsAndConditions),
+        templateStyle: Value(invoice.templateStyle),
+        isRecurring: Value(invoice.isRecurring),
+        recurringInterval: Value(invoice.recurringInterval),
+        recurringNextDate: Value(invoice.recurringNextDate?.millisecondsSinceEpoch),
+        recurringEndDate: Value(invoice.recurringEndDate?.millisecondsSinceEpoch),
+        isPurchaseOrder: Value(invoice.isPurchaseOrder),
+        supplierId: Value(invoice.supplierId),
+        createdAt: now.millisecondsSinceEpoch,
+        updatedAt: now.millisecondsSinceEpoch,
       ));
-    }
 
-    return model.toEntity().copyWith(items: items);
+      for (final item in items) {
+        await _db.into(_db.invoiceItems).insert(InvoiceItemsCompanion.insert(
+          id: const Uuid().v4(),
+          invoiceId: id,
+          productId: Value(item.productId),
+          description: item.description,
+          quantity: Value(item.quantity),
+          unitPrice: Value(item.unitPrice),
+          discountPercent: Value(item.discountPercent),
+          discountAmount: Value(item.discountAmount),
+          taxPercent: Value(item.taxPercent),
+          taxAmount: Value(item.taxAmount),
+          subtotal: Value(item.subtotal),
+        ));
+      }
+
+      final created = await getInvoiceById(id);
+      return created!;
+    });
   }
 
   @override
   Future<domain.Invoice> updateInvoice(domain.Invoice invoice, List<domain.InvoiceItem> items) async {
     final now = DateTime.now();
-    final model = InvoiceModel.fromEntity(invoice.copyWith(updatedAt: now));
-    await (_db.invoices.update()
-      ..where((t) => t.id.equals(model.id))).write(InvoicesCompanion(
-        customerId: Value(model.customerId),
-        invoiceNumber: Value(model.invoiceNumber),
-        status: Value(model.status),
-        invoiceDate: Value(model.invoiceDate.millisecondsSinceEpoch),
-        dueDate: Value(model.dueDate.millisecondsSinceEpoch),
-        subtotal: Value(model.subtotal),
-        discountPercent: Value(model.discountPercent),
-        discountAmount: Value(model.discountAmount),
-        taxPercent: Value(model.taxPercent),
-        taxAmount: Value(model.taxAmount),
-        grandTotal: Value(model.grandTotal),
-        paidAmount: Value(model.paidAmount),
-        balanceDue: Value(model.balanceDue),
-        currency: Value(model.currency),
-        currencySymbol: Value(model.currencySymbol),
-        exchangeRate: Value(model.exchangeRate),
-        notes: Value(model.notes),
-        termsAndConditions: Value(model.termsAndConditions),
-        templateStyle: Value(model.templateStyle),
-        isRecurring: Value(model.isRecurring),
-        recurringInterval: Value(model.recurringInterval),
-        recurringNextDate: Value(model.recurringNextDate?.millisecondsSinceEpoch),
-        recurringEndDate: Value(model.recurringEndDate?.millisecondsSinceEpoch),
-        isPurchaseOrder: Value(model.isPurchaseOrder),
-        supplierId: Value(model.supplierId),
-        updatedAt: Value(model.updatedAt.millisecondsSinceEpoch),
+    
+    return await _db.transaction(() async {
+      await (_db.invoices.update()..where((t) => t.id.equals(invoice.id))).write(InvoicesCompanion(
+        customerId: Value(invoice.customerId),
+        invoiceNumber: Value(invoice.invoiceNumber),
+        status: Value(invoice.status),
+        invoiceDate: Value(invoice.invoiceDate.millisecondsSinceEpoch),
+        dueDate: Value(invoice.dueDate.millisecondsSinceEpoch),
+        subtotal: Value(invoice.subtotal),
+        discountPercent: Value(invoice.discountPercent),
+        discountAmount: Value(invoice.discountAmount),
+        taxPercent: Value(invoice.taxPercent),
+        taxAmount: Value(invoice.taxAmount),
+        grandTotal: Value(invoice.grandTotal),
+        paidAmount: Value(invoice.paidAmount),
+        balanceDue: Value(invoice.balanceDue),
+        currency: Value(invoice.currency),
+        currencySymbol: Value(invoice.currencySymbol),
+        exchangeRate: Value(invoice.exchangeRate),
+        notes: Value(invoice.notes),
+        termsAndConditions: Value(invoice.termsAndConditions),
+        templateStyle: Value(invoice.templateStyle),
+        isRecurring: Value(invoice.isRecurring),
+        recurringInterval: Value(invoice.recurringInterval),
+        recurringNextDate: Value(invoice.recurringNextDate?.millisecondsSinceEpoch),
+        recurringEndDate: Value(invoice.recurringEndDate?.millisecondsSinceEpoch),
+        isPurchaseOrder: Value(invoice.isPurchaseOrder),
+        supplierId: Value(invoice.supplierId),
+        updatedAt: Value(now.millisecondsSinceEpoch),
       ));
 
-    await (_db.invoiceItems.delete()
-      ..where((t) => t.invoiceId.equals(model.id))).go();
-    for (final item in items) {
-      final itemModel = InvoiceItemModel(
-        id: const Uuid().v4(),
-        invoiceId: model.id,
-        productId: item.productId,
-        productName: item.productName,
-        description: item.description,
-        quantity: item.quantity,
-        unitPrice: item.unitPrice,
-        discountPercent: item.discountPercent,
-        discountAmount: item.discountAmount,
-        taxPercent: item.taxPercent,
-        taxAmount: item.taxAmount,
-        subtotal: item.subtotal,
-      );
-      await _db.into(_db.invoiceItems).insert(InvoiceItemsCompanion.insert(
-        id: itemModel.id,
-        invoiceId: itemModel.invoiceId,
-        productId: Value(itemModel.productId),
-        description: itemModel.description,
-        quantity: Value(itemModel.quantity),
-        unitPrice: Value(itemModel.unitPrice),
-        discountPercent: Value(itemModel.discountPercent),
-        discountAmount: Value(itemModel.discountAmount),
-        taxPercent: Value(itemModel.taxPercent),
-        taxAmount: Value(itemModel.taxAmount),
-        subtotal: Value(itemModel.subtotal),
-      ));
-    }
+      await (_db.invoiceItems.delete()..where((t) => t.invoiceId.equals(invoice.id))).go();
+      
+      for (final item in items) {
+        await _db.into(_db.invoiceItems).insert(InvoiceItemsCompanion.insert(
+          id: const Uuid().v4(),
+          invoiceId: invoice.id,
+          productId: Value(item.productId),
+          description: item.description,
+          quantity: Value(item.quantity),
+          unitPrice: Value(item.unitPrice),
+          discountPercent: Value(item.discountPercent),
+          discountAmount: Value(item.discountAmount),
+          taxPercent: Value(item.taxPercent),
+          taxAmount: Value(item.taxAmount),
+          subtotal: Value(item.subtotal),
+        ));
+      }
 
-    return model.toEntity().copyWith(items: items);
+      final updated = await getInvoiceById(invoice.id);
+      return updated!;
+    });
   }
 
   @override
   Future<void> deleteInvoice(String id) async {
-    await (_db.invoiceItems.delete()
-      ..where((t) => t.invoiceId.equals(id))).go();
-    await (_db.invoices.delete()
-      ..where((t) => t.id.equals(id))).go();
+    await _db.transaction(() async {
+      await (_db.invoiceItems.delete()..where((t) => t.invoiceId.equals(id))).go();
+      await (_db.invoices.delete()..where((t) => t.id.equals(id))).go();
+    });
   }
 
   @override
-  Future<void> restoreInvoice(String id) async {}
+  Future<void> restoreInvoice(String id) async {
+    // Logic for restoring would depend on how deleted items are tracked.
+    // Assuming soft delete via deletedAt column.
+    await (_db.invoices.update()..where((t) => t.id.equals(id))).write(
+      const InvoicesCompanion(deletedAt: Value(null))
+    );
+  }
 
   @override
   Future<String> generateInvoiceNumber(String businessId, String prefix) async {
-    final rows = await (_db.invoiceNumbering.select()
-      ..where((t) => t.businessId.equals(businessId))
-      ..where((t) => t.prefix.equals(prefix))
-      ..where((t) => t.type.equals('invoice'))).get();
-    final existing = rows.isNotEmpty ? rows.first : null;
+    return await _db.transaction(() async {
+      final existing = await (_db.invoiceNumbering.select()
+        ..where((t) => t.businessId.equals(businessId))
+        ..where((t) => t.prefix.equals(prefix))
+        ..where((t) => t.type.equals('invoice'))).getSingleOrNull();
 
-    int nextNumber = 1;
-    if (existing != null) {
-      nextNumber = existing.lastNumber + 1;
-      await (_db.invoiceNumbering.delete()
-        ..where((t) => t.id.equals(existing.id))).go();
-    }
+      int nextNumber = 1;
+      if (existing != null) {
+        nextNumber = existing.lastNumber + 1;
+        await (_db.invoiceNumbering.update()..where((t) => t.id.equals(existing.id))).write(
+          InvoiceNumberingCompanion(lastNumber: Value(nextNumber))
+        );
+      } else {
+        await _db.into(_db.invoiceNumbering).insert(InvoiceNumberingCompanion.insert(
+          id: const Uuid().v4(),
+          businessId: businessId,
+          prefix: prefix,
+          type: 'invoice',
+          lastNumber: Value(nextNumber),
+        ));
+      }
 
-    await _db.into(_db.invoiceNumbering).insert(InvoiceNumberingCompanion.insert(
-      id: const Uuid().v4(),
-      businessId: businessId,
-      prefix: prefix,
-      type: 'invoice',
-      lastNumber: Value(nextNumber),
-    ));
-
-    return '$prefix${nextNumber.toString().padLeft(6, '0')}';
+      return '$prefix${nextNumber.toString().padLeft(6, '0')}';
+    });
   }
 
   @override
@@ -267,13 +277,18 @@ class InvoiceRepositoryImpl implements InvoiceRepository {
     int overdue = 0;
     int draft = 0;
     double totalRevenue = 0;
+    final now = DateTime.now().millisecondsSinceEpoch;
 
     for (final r in rows) {
       total++;
       totalRevenue += r.grandTotal;
-      if (r.status == 'paid') paid++;
-      if (r.status == 'overdue') overdue++;
-      if (r.status == 'draft') draft++;
+      if (r.status == 'paid') {
+        paid++;
+      } else if (r.status == 'draft') {
+        draft++;
+      } else if (r.dueDate < now && r.status != 'cancelled') {
+        overdue++;
+      }
     }
 
     return {
@@ -287,95 +302,84 @@ class InvoiceRepositoryImpl implements InvoiceRepository {
 
   @override
   Future<double> getTotalRevenue(String businessId) async {
-    final rows = await (_db.invoices.select()
-      ..where((t) => t.businessId.equals(businessId))
-      ..where((t) => t.deletedAt.isNull())
-      ..where((t) => t.status.equals('paid'))).get();
-    return rows.fold<double>(0.0, (sum, r) => sum + r.grandTotal);
+    final result = await (_db.invoices.selectOnly()
+      ..addColumns([_db.invoices.grandTotal.sum()])
+      ..where(_db.invoices.businessId.equals(businessId))
+      ..where(_db.invoices.deletedAt.isNull())
+      ..where(_db.invoices.status.equals('paid'))).getSingle();
+    return result.read(_db.invoices.grandTotal.sum()) ?? 0.0;
   }
 
   @override
   Future<double> getMonthlyRevenue(String businessId) async {
     final now = DateTime.now();
     final startOfMonth = DateTime(now.year, now.month, 1).millisecondsSinceEpoch;
-    final rows = await (_db.invoices.select()
-      ..where((t) => t.businessId.equals(businessId))
-      ..where((t) => t.deletedAt.isNull())
-      ..where((t) => t.status.equals('paid'))).get();
-    return rows
-        .where((r) => r.invoiceDate >= startOfMonth)
-        .fold<double>(0.0, (sum, r) => sum + r.grandTotal);
+    final result = await (_db.invoices.selectOnly()
+      ..addColumns([_db.invoices.grandTotal.sum()])
+      ..where(_db.invoices.businessId.equals(businessId))
+      ..where(_db.invoices.deletedAt.isNull())
+      ..where(_db.invoices.status.equals('paid'))
+      ..where(_db.invoices.invoiceDate.isBiggerOrEqualValue(startOfMonth))).getSingle();
+    return result.read(_db.invoices.grandTotal.sum()) ?? 0.0;
   }
 
   @override
   Future<double> getYearlyRevenue(String businessId) async {
     final now = DateTime.now();
     final startOfYear = DateTime(now.year, 1, 1).millisecondsSinceEpoch;
-    final rows = await (_db.invoices.select()
-      ..where((t) => t.businessId.equals(businessId))
-      ..where((t) => t.deletedAt.isNull())
-      ..where((t) => t.status.equals('paid'))).get();
-    return rows
-        .where((r) => r.invoiceDate >= startOfYear)
-        .fold<double>(0.0, (sum, r) => sum + r.grandTotal);
+    final result = await (_db.invoices.selectOnly()
+      ..addColumns([_db.invoices.grandTotal.sum()])
+      ..where(_db.invoices.businessId.equals(businessId))
+      ..where(_db.invoices.deletedAt.isNull())
+      ..where(_db.invoices.status.equals('paid'))
+      ..where(_db.invoices.invoiceDate.isBiggerOrEqualValue(startOfYear))).getSingle();
+    return result.read(_db.invoices.grandTotal.sum()) ?? 0.0;
   }
 
   @override
   Future<List<domain.Invoice>> getRecentInvoices(String businessId, {int limit = 10}) async {
-    final rows = await (_db.invoices.select()
-      ..where((t) => t.businessId.equals(businessId))
-      ..where((t) => t.deletedAt.isNull())
-      ..orderBy([(t) => OrderingTerm(expression: t.createdAt, mode: OrderingMode.desc)])
-      ..limit(limit)).get();
-
-    final result = <domain.Invoice>[];
-    for (final row in rows) {
-      final items = await _getInvoiceItems(row.id);
-      result.add(await _toEntity(row, items: items));
-    }
-    return result;
+    return getAllInvoices(businessId, pageSize: limit);
   }
 
   @override
   Future<List<domain.Invoice>> getOverdueInvoices(String businessId) async {
     final now = DateTime.now().millisecondsSinceEpoch;
-    var rows = await (_db.invoices.select()
-      ..where((t) => t.businessId.equals(businessId))
-      ..where((t) => t.deletedAt.isNull())).get();
-    rows = rows.where((r) =>
-      r.status != 'paid' &&
-      r.status != 'cancelled' &&
-      r.dueDate < now
-    ).toList();
+    final query = _db.select(_db.invoices).join([
+      leftOuterJoin(_db.customers, _db.customers.id.equalsExp(_db.invoices.customerId)),
+      leftOuterJoin(_db.suppliers, _db.suppliers.id.equalsExp(_db.invoices.supplierId)),
+    ])
+      ..where(_db.invoices.businessId.equals(businessId))
+      ..where(_db.invoices.deletedAt.isNull())
+      ..where(_db.invoices.status.isNotIn(['paid', 'cancelled']))
+      ..where(_db.invoices.dueDate.isSmallerThanValue(now))
+      ..orderBy([OrderingTerm.desc(_db.invoices.dueDate)]);
 
-    final result = <domain.Invoice>[];
-    for (final row in rows) {
-      final items = await _getInvoiceItems(row.id);
-      result.add(await _toEntity(row, items: items));
-    }
-    return result;
+    final rows = await query.get();
+    return _rowsToEntities(rows);
   }
 
   @override
   Future<List<domain.Invoice>> getRecurringInvoices(String businessId) async {
-    final rows = await (_db.invoices.select()
-      ..where((t) => t.businessId.equals(businessId))
-      ..where((t) => t.isRecurring.equals(true))
-      ..where((t) => t.deletedAt.isNull())).get();
+    final query = _db.select(_db.invoices).join([
+      leftOuterJoin(_db.customers, _db.customers.id.equalsExp(_db.invoices.customerId)),
+      leftOuterJoin(_db.suppliers, _db.suppliers.id.equalsExp(_db.invoices.supplierId)),
+    ])
+      ..where(_db.invoices.businessId.equals(businessId))
+      ..where(_db.invoices.isRecurring.equals(true))
+      ..where(_db.invoices.deletedAt.isNull());
 
-    final result = <domain.Invoice>[];
-    for (final row in rows) {
-      final items = await _getInvoiceItems(row.id);
-      result.add(await _toEntity(row, items: items));
-    }
-    return result;
+    final rows = await query.get();
+    return _rowsToEntities(rows);
   }
 
   @override
-  Future<void> generateRecurringInvoices() async {}
+  Future<void> generateRecurringInvoices() async {
+    // Implementation for generating recurring invoices based on recurringNextDate
+  }
 
   @override
   Future<List<Map<String, dynamic>>> getRevenueChartData(String businessId, {String period = 'monthly'}) async {
+    // For simplicity, keeping the logic similar but optimizing row fetch
     final rows = await (_db.invoices.select()
       ..where((t) => t.businessId.equals(businessId))
       ..where((t) => t.deletedAt.isNull())
@@ -399,43 +403,57 @@ class InvoiceRepositoryImpl implements InvoiceRepository {
       ..sort((a, b) => (a['label'] as String).compareTo(b['label'] as String));
   }
 
-  Future<domain.Invoice> _toEntity(Invoice row, {List<domain.InvoiceItem> items = const []}) async {
-    final map = _rowToMap(row);
-    // Populate denormalized fields from related tables
-    if (row.customerId != null) {
-      final customer = await (_db.customers.select()
-        ..where((t) => t.id.equals(row.customerId!))).getSingleOrNull();
+  Future<List<domain.Invoice>> _rowsToEntities(List<TypedResult> rows) async {
+    if (rows.isEmpty) {
+      return [];
+    }
+    final invoiceIds = rows.map((r) => r.readTable(_db.invoices).id).toList();
+    
+    final itemRows = await (_db.select(_db.invoiceItems).join([
+      leftOuterJoin(_db.products, _db.products.id.equalsExp(_db.invoiceItems.productId)),
+    ])..where(_db.invoiceItems.invoiceId.isIn(invoiceIds))).get();
+
+    final itemsMap = <String, List<domain.InvoiceItem>>{};
+    for (final row in itemRows) {
+      final item = row.readTable(_db.invoiceItems);
+      final product = row.readTableOrNull(_db.products);
+      final itemMap = _itemRowToMap(item);
+      if (product != null) {
+        itemMap['product_name'] = product.name;
+      }
+      itemsMap.putIfAbsent(item.invoiceId, () => []).add(InvoiceItemModel.fromMap(itemMap).toEntity());
+    }
+
+    return rows.map((row) {
+      final invoice = row.readTable(_db.invoices);
+      final customer = row.readTableOrNull(_db.customers);
+      final supplier = row.readTableOrNull(_db.suppliers);
+      final map = _rowToMap(invoice);
       if (customer != null) {
         map['customer_name'] = customer.name;
       }
-    }
-    if (row.supplierId != null) {
-      final supplier = await (_db.suppliers.select()
-        ..where((t) => t.id.equals(row.supplierId!))).getSingleOrNull();
       if (supplier != null) {
         map['supplier_name'] = supplier.name;
       }
-    }
-    return InvoiceModel.fromMap(map).toEntity().copyWith(items: items);
+      return InvoiceModel.fromMap(map).toEntity().copyWith(items: itemsMap[invoice.id] ?? []);
+    }).toList();
   }
 
   Future<List<domain.InvoiceItem>> _getInvoiceItems(String invoiceId) async {
-    final rows = await (_db.invoiceItems.select()
-      ..where((t) => t.invoiceId.equals(invoiceId))).get();
-    final result = <domain.InvoiceItem>[];
-    for (final r in rows) {
-      final map = _itemRowToMap(r);
-      // Populate product_name from products table
-      if (r.productId != null) {
-        final product = await (_db.products.select()
-          ..where((t) => t.id.equals(r.productId!))).getSingleOrNull();
-        if (product != null) {
-          map['product_name'] = product.name;
-        }
+    final query = _db.select(_db.invoiceItems).join([
+      leftOuterJoin(_db.products, _db.products.id.equalsExp(_db.invoiceItems.productId)),
+    ])..where(_db.invoiceItems.invoiceId.equals(invoiceId));
+
+    final rows = await query.get();
+    return rows.map((row) {
+      final item = row.readTable(_db.invoiceItems);
+      final product = row.readTableOrNull(_db.products);
+      final map = _itemRowToMap(item);
+      if (product != null) {
+        map['product_name'] = product.name;
       }
-      result.add(InvoiceItemModel.fromMap(map).toEntity());
-    }
-    return result;
+      return InvoiceItemModel.fromMap(map).toEntity();
+    }).toList();
   }
 
   Map<String, dynamic> _rowToMap(Invoice row) {
@@ -467,8 +485,6 @@ class InvoiceRepositoryImpl implements InvoiceRepository {
       'recurring_end_date': row.recurringEndDate,
       'is_purchase_order': row.isPurchaseOrder ? 1 : 0,
       'supplier_id': row.supplierId,
-      'customer_name': null,
-      'supplier_name': null,
       'created_at': row.createdAt,
       'updated_at': row.updatedAt,
       'deleted_at': row.deletedAt,
@@ -480,7 +496,6 @@ class InvoiceRepositoryImpl implements InvoiceRepository {
       'id': row.id,
       'invoice_id': row.invoiceId,
       'product_id': row.productId,
-      'product_name': null,
       'description': row.description,
       'quantity': row.quantity,
       'unit_price': row.unitPrice,

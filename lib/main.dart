@@ -1,13 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:invoice_pro/core/di/injection_container.dart';
+import 'package:invoice_pro/core/di/providers.dart';
 import 'package:invoice_pro/core/router/app_router.dart';
 import 'package:invoice_pro/themes/app_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initDependencies();
-  runApp(const ProviderScope(child: InvoiceProApp()));
+  
+  final container = ProviderContainer();
+  await container.read(activeBusinessProvider.notifier).loadActiveBusiness();
+  
+  runApp(UncontrolledProviderScope(container: container, child: const InvoiceProApp()));
 }
 
 class InvoiceProApp extends ConsumerWidget {

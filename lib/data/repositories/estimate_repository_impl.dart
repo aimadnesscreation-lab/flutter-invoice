@@ -7,239 +7,268 @@ import 'package:invoice_pro/domain/repositories/estimate_repository.dart';
 
 class EstimateRepositoryImpl implements EstimateRepository {
   final AppDatabase _db;
-  final Map<String, int> _counters = {};
 
   EstimateRepositoryImpl(this._db);
 
   @override
   Future<List<domain.Estimate>> getAllEstimates(String businessId, {String? status, String? searchQuery, int page = 1, int pageSize = 20}) async {
     final offset = (page - 1) * pageSize;
-    var allRows = await (_db.estimates.select()
-      ..where((t) => t.businessId.equals(businessId))
-      ..where((t) => t.deletedAt.isNull())).get();
-    var rows = allRows;
+    final query = _db.select(_db.estimates).join([
+      leftOuterJoin(_db.customers, _db.customers.id.equalsExp(_db.estimates.customerId)),
+    ])
+      ..where(_db.estimates.businessId.equals(businessId))
+      ..where(_db.estimates.deletedAt.isNull());
 
-    if (status != null) {
-      rows = rows.where((r) => r.status == status).toList();
+    if (status != null && status.isNotEmpty) {
+      query.where(_db.estimates.status.equals(status));
     }
+
     if (searchQuery != null && searchQuery.isNotEmpty) {
-      final query = searchQuery.toLowerCase();
-      rows = rows.where((r) => r.estimateNumber.toLowerCase().contains(query)).toList();
+      final term = '%$searchQuery%';
+      query.where(_db.estimates.estimateNumber.like(term));
     }
 
-    rows.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-    final paged = rows.skip(offset).take(pageSize).toList();
+    query.orderBy([OrderingTerm(expression: _db.estimates.createdAt, mode: OrderingMode.desc)]);
+    query.limit(pageSize, offset: offset);
 
-    final result = <domain.Estimate>[];
-    for (final row in paged) {
-      final items = await _getEstimateItems(row.id);
-      result.add(await _toEntity(row, items: items));
+    final rows = await query.get();
+    if (rows.isEmpty) return [];
+
+    final estimateIds = rows.map((r) => r.readTable(_db.estimates).id).toList();
+    
+    // Fetch all items for these estimates
+    final itemRows = await (_db.select(_db.estimateItems).join([
+      leftOuterJoin(_db.products, _db.products.id.equalsExp(_db.estimateItems.productId)),
+    ])..where(_db.estimateItems.estimateId.isIn(estimateIds))).get();
+
+    final itemsMap = <String, List<domain.EstimateItem>>{};
+    for (final row in itemRows) {
+      final item = row.readTable(_db.estimateItems);
+      final product = row.readTableOrNull(_db.products);
+      final map = _itemRowToMap(item);
+      if (product != null) map['product_name'] = product.name;
+      itemsMap.putIfAbsent(item.estimateId, () => []).add(EstimateItemModel.fromMap(map).toEntity());
     }
-    return result;
+
+    return rows.map((row) {
+      final estimate = row.readTable(_db.estimates);
+      final customer = row.readTableOrNull(_db.customers);
+      final map = _rowToMap(estimate);
+      if (customer != null) map['customer_name'] = customer.name;
+      return EstimateModel.fromMap(map).toEntity().copyWith(items: itemsMap[estimate.id] ?? []);
+    }).toList();
   }
 
   @override
   Future<domain.Estimate?> getEstimateById(String id) async {
-    final row = await (_db.estimates.select()
-      ..where((t) => t.id.equals(id))).getSingleOrNull();
+    final query = _db.select(_db.estimates).join([
+      leftOuterJoin(_db.customers, _db.customers.id.equalsExp(_db.estimates.customerId)),
+    ])..where(_db.estimates.id.equals(id));
+
+    final row = await query.getSingleOrNull();
     if (row == null) return null;
-    final items = await _getEstimateItems(row.id);
-    return _toEntity(row, items: items);
+
+    final estimate = row.readTable(_db.estimates);
+    final customer = row.readTableOrNull(_db.customers);
+    final map = _rowToMap(estimate);
+    if (customer != null) map['customer_name'] = customer.name;
+
+    final items = await _getEstimateItems(estimate.id);
+    return EstimateModel.fromMap(map).toEntity().copyWith(items: items);
   }
 
   @override
   Future<domain.Estimate> createEstimate(domain.Estimate estimate, List<domain.EstimateItem> items) async {
     final id = const Uuid().v4();
     final now = DateTime.now();
-    final model = EstimateModel(
-      id: id,
-      businessId: estimate.businessId,
-      customerId: estimate.customerId,
-      customerName: estimate.customerName,
-      estimateNumber: estimate.estimateNumber,
-      status: estimate.status,
-      estimateDate: estimate.estimateDate,
-      expiryDate: estimate.expiryDate,
-      subtotal: estimate.subtotal,
-      discountPercent: estimate.discountPercent,
-      discountAmount: estimate.discountAmount,
-      taxPercent: estimate.taxPercent,
-      taxAmount: estimate.taxAmount,
-      grandTotal: estimate.grandTotal,
-      currency: estimate.currency,
-      currencySymbol: estimate.currencySymbol,
-      notes: estimate.notes,
-      termsAndConditions: estimate.termsAndConditions,
-      convertedInvoiceId: estimate.convertedInvoiceId,
-      createdAt: now,
-      updatedAt: now,
-    );
-    await _db.into(_db.estimates).insert(EstimatesCompanion.insert(
-      id: model.id,
-      businessId: model.businessId,
-      customerId: Value(model.customerId),
-      estimateNumber: model.estimateNumber,
-      status: Value(model.status),
-      estimateDate: model.estimateDate.millisecondsSinceEpoch,
-      expiryDate: model.expiryDate.millisecondsSinceEpoch,
-      subtotal: Value(model.subtotal),
-      discountPercent: Value(model.discountPercent),
-      discountAmount: Value(model.discountAmount),
-      taxPercent: Value(model.taxPercent),
-      taxAmount: Value(model.taxAmount),
-      grandTotal: Value(model.grandTotal),
-      currency: Value(model.currency),
-      currencySymbol: Value(model.currencySymbol),
-      notes: Value(model.notes),
-      termsAndConditions: Value(model.termsAndConditions),
-      convertedInvoiceId: Value(model.convertedInvoiceId),
-      createdAt: model.createdAt.millisecondsSinceEpoch,
-      updatedAt: model.updatedAt.millisecondsSinceEpoch,
-    ));
-
-    for (final item in items) {
-      final itemModel = EstimateItemModel(
-        id: const Uuid().v4(),
-        estimateId: id,
-        productId: item.productId,
-        productName: item.productName,
-        description: item.description,
-        quantity: item.quantity,
-        unitPrice: item.unitPrice,
-        discountPercent: item.discountPercent,
-        discountAmount: item.discountAmount,
-        taxPercent: item.taxPercent,
-        taxAmount: item.taxAmount,
-        subtotal: item.subtotal,
-      );
-      await _db.into(_db.estimateItems).insert(EstimateItemsCompanion.insert(
-        id: itemModel.id,
-        estimateId: itemModel.estimateId,
-        productId: Value(itemModel.productId),
-        description: itemModel.description,
-        quantity: Value(itemModel.quantity),
-        unitPrice: Value(itemModel.unitPrice),
-        discountPercent: Value(itemModel.discountPercent),
-        discountAmount: Value(itemModel.discountAmount),
-        taxPercent: Value(itemModel.taxPercent),
-        taxAmount: Value(itemModel.taxAmount),
-        subtotal: Value(itemModel.subtotal),
+    
+    return await _db.transaction(() async {
+      await _db.into(_db.estimates).insert(EstimatesCompanion.insert(
+        id: id,
+        businessId: estimate.businessId,
+        customerId: Value(estimate.customerId),
+        estimateNumber: estimate.estimateNumber,
+        status: Value(estimate.status),
+        estimateDate: estimate.estimateDate.millisecondsSinceEpoch,
+        expiryDate: estimate.expiryDate.millisecondsSinceEpoch,
+        subtotal: Value(estimate.subtotal),
+        discountPercent: Value(estimate.discountPercent),
+        discountAmount: Value(estimate.discountAmount),
+        taxPercent: Value(estimate.taxPercent),
+        taxAmount: Value(estimate.taxAmount),
+        grandTotal: Value(estimate.grandTotal),
+        currency: Value(estimate.currency),
+        currencySymbol: Value(estimate.currencySymbol),
+        notes: Value(estimate.notes),
+        termsAndConditions: Value(estimate.termsAndConditions),
+        convertedInvoiceId: Value(estimate.convertedInvoiceId),
+        createdAt: now.millisecondsSinceEpoch,
+        updatedAt: now.millisecondsSinceEpoch,
       ));
-    }
 
-    return model.toEntity().copyWith(items: items);
+      for (final item in items) {
+        await _db.into(_db.estimateItems).insert(EstimateItemsCompanion.insert(
+          id: const Uuid().v4(),
+          estimateId: id,
+          productId: Value(item.productId),
+          description: item.description,
+          quantity: Value(item.quantity),
+          unitPrice: Value(item.unitPrice),
+          discountPercent: Value(item.discountPercent),
+          discountAmount: Value(item.discountAmount),
+          taxPercent: Value(item.taxPercent),
+          taxAmount: Value(item.taxAmount),
+          subtotal: Value(item.subtotal),
+        ));
+      }
+
+      final created = await getEstimateById(id);
+      return created!;
+    });
   }
 
   @override
   Future<domain.Estimate> updateEstimate(domain.Estimate estimate, List<domain.EstimateItem> items) async {
     final now = DateTime.now();
-    final model = EstimateModel.fromEntity(estimate.copyWith(updatedAt: now));
-    await (_db.estimates.update()
-      ..where((t) => t.id.equals(model.id))).write(EstimatesCompanion(
-        customerId: Value(model.customerId),
-        estimateNumber: Value(model.estimateNumber),
-        status: Value(model.status),
-        estimateDate: Value(model.estimateDate.millisecondsSinceEpoch),
-        expiryDate: Value(model.expiryDate.millisecondsSinceEpoch),
-        subtotal: Value(model.subtotal),
-        discountPercent: Value(model.discountPercent),
-        discountAmount: Value(model.discountAmount),
-        taxPercent: Value(model.taxPercent),
-        taxAmount: Value(model.taxAmount),
-        grandTotal: Value(model.grandTotal),
-        currency: Value(model.currency),
-        currencySymbol: Value(model.currencySymbol),
-        notes: Value(model.notes),
-        termsAndConditions: Value(model.termsAndConditions),
-        convertedInvoiceId: Value(model.convertedInvoiceId),
-        updatedAt: Value(model.updatedAt.millisecondsSinceEpoch),
-      ));
+    
+    return await _db.transaction(() async {
+      await (_db.estimates.update()
+        ..where((t) => t.id.equals(estimate.id))).write(EstimatesCompanion(
+          customerId: Value(estimate.customerId),
+          estimateNumber: Value(estimate.estimateNumber),
+          status: Value(estimate.status),
+          estimateDate: Value(estimate.estimateDate.millisecondsSinceEpoch),
+          expiryDate: Value(estimate.expiryDate.millisecondsSinceEpoch),
+          subtotal: Value(estimate.subtotal),
+          discountPercent: Value(estimate.discountPercent),
+          discountAmount: Value(estimate.discountAmount),
+          taxPercent: Value(estimate.taxPercent),
+          taxAmount: Value(estimate.taxAmount),
+          grandTotal: Value(estimate.grandTotal),
+          currency: Value(estimate.currency),
+          currencySymbol: Value(estimate.currencySymbol),
+          notes: Value(estimate.notes),
+          termsAndConditions: Value(estimate.termsAndConditions),
+          convertedInvoiceId: Value(estimate.convertedInvoiceId),
+          updatedAt: Value(now.millisecondsSinceEpoch),
+        ));
 
-    await (_db.estimateItems.delete()
-      ..where((t) => t.estimateId.equals(model.id))).go();
-    for (final item in items) {
-      final itemModel = EstimateItemModel(
-        id: const Uuid().v4(),
-        estimateId: model.id,
-        productId: item.productId,
-        productName: item.productName,
-        description: item.description,
-        quantity: item.quantity,
-        unitPrice: item.unitPrice,
-        discountPercent: item.discountPercent,
-        discountAmount: item.discountAmount,
-        taxPercent: item.taxPercent,
-        taxAmount: item.taxAmount,
-        subtotal: item.subtotal,
-      );
-      await _db.into(_db.estimateItems).insert(EstimateItemsCompanion.insert(
-        id: itemModel.id,
-        estimateId: itemModel.estimateId,
-        productId: Value(itemModel.productId),
-        description: itemModel.description,
-        quantity: Value(itemModel.quantity),
-        unitPrice: Value(itemModel.unitPrice),
-        discountPercent: Value(itemModel.discountPercent),
-        discountAmount: Value(itemModel.discountAmount),
-        taxPercent: Value(itemModel.taxPercent),
-        taxAmount: Value(itemModel.taxAmount),
-        subtotal: Value(itemModel.subtotal),
-      ));
-    }
+      await (_db.estimateItems.delete()
+        ..where((t) => t.estimateId.equals(estimate.id))).go();
+        
+      for (final item in items) {
+        await _db.into(_db.estimateItems).insert(EstimateItemsCompanion.insert(
+          id: const Uuid().v4(),
+          estimateId: estimate.id,
+          productId: Value(item.productId),
+          description: item.description,
+          quantity: Value(item.quantity),
+          unitPrice: Value(item.unitPrice),
+          discountPercent: Value(item.discountPercent),
+          discountAmount: Value(item.discountAmount),
+          taxPercent: Value(item.taxPercent),
+          taxAmount: Value(item.taxAmount),
+          subtotal: Value(item.subtotal),
+        ));
+      }
 
-    return model.toEntity().copyWith(items: items);
+      final updated = await getEstimateById(estimate.id);
+      return updated!;
+    });
   }
 
   @override
   Future<void> deleteEstimate(String id) async {
-    await (_db.estimateItems.delete()
-      ..where((t) => t.estimateId.equals(id))).go();
-    await (_db.estimates.delete()
-      ..where((t) => t.id.equals(id))).go();
+    await (_db.estimates.update()
+      ..where((t) => t.id.equals(id))).write(EstimatesCompanion(
+        deletedAt: Value(DateTime.now().millisecondsSinceEpoch),
+      ));
   }
 
   @override
   Future<String> generateEstimateNumber(String businessId, String prefix) async {
-    _counters[businessId] = (_counters[businessId] ?? 0) + 1;
-    return '$prefix${_counters[businessId]!.toString().padLeft(6, '0')}';
+    final query = _db.selectOnly(_db.estimates)
+      ..addColumns([_db.estimates.id.count()])
+      ..where(_db.estimates.businessId.equals(businessId));
+    final count = await query.map((row) => row.read(_db.estimates.id.count())).getSingle();
+    final nextNumber = (count ?? 0) + 1;
+    return '$prefix${nextNumber.toString().padLeft(6, '0')}';
   }
 
   @override
   Future<String?> convertEstimateToInvoice(String estimateId) async {
-    // This would create an invoice from the estimate
-    return null;
-  }
+    final estimate = await getEstimateById(estimateId);
+    if (estimate == null) return null;
 
-  Future<domain.Estimate> _toEntity(Estimate row, {List<domain.EstimateItem> items = const []}) async {
-    final map = _rowToMap(row);
-    // Populate denormalized fields from related tables
-    if (row.customerId != null) {
-      final customer = await (_db.customers.select()
-        ..where((t) => t.id.equals(row.customerId!))).getSingleOrNull();
-      if (customer != null) {
-        map['customer_name'] = customer.name;
+    final invoiceId = const Uuid().v4();
+    final now = DateTime.now();
+
+    await _db.transaction(() async {
+      // Create invoice
+      await _db.into(_db.invoices).insert(InvoicesCompanion.insert(
+        id: invoiceId,
+        businessId: estimate.businessId,
+        customerId: Value(estimate.customerId),
+        invoiceNumber: 'INV-${estimate.estimateNumber.replaceAll(RegExp(r'[^0-9]'), '')}',
+        status: const Value('draft'),
+        invoiceDate: now.millisecondsSinceEpoch,
+        dueDate: now.add(const Duration(days: 30)).millisecondsSinceEpoch,
+        subtotal: Value(estimate.subtotal),
+        discountPercent: Value(estimate.discountPercent),
+        discountAmount: Value(estimate.discountAmount),
+        taxPercent: Value(estimate.taxPercent),
+        taxAmount: Value(estimate.taxAmount),
+        grandTotal: Value(estimate.grandTotal),
+        currency: Value(estimate.currency),
+        currencySymbol: Value(estimate.currencySymbol),
+        notes: Value(estimate.notes),
+        termsAndConditions: Value(estimate.termsAndConditions),
+        createdAt: now.millisecondsSinceEpoch,
+        updatedAt: now.millisecondsSinceEpoch,
+      ));
+
+      // Create invoice items
+      for (final item in estimate.items) {
+        await _db.into(_db.invoiceItems).insert(InvoiceItemsCompanion.insert(
+          id: const Uuid().v4(),
+          invoiceId: invoiceId,
+          productId: Value(item.productId),
+          description: item.description,
+          quantity: Value(item.quantity),
+          unitPrice: Value(item.unitPrice),
+          discountPercent: Value(item.discountPercent),
+          discountAmount: Value(item.discountAmount),
+          taxPercent: Value(item.taxPercent),
+          taxAmount: Value(item.taxAmount),
+          subtotal: Value(item.subtotal),
+        ));
       }
-    }
-    return EstimateModel.fromMap(map).toEntity().copyWith(items: items);
+
+      // Mark estimate as converted
+      await (_db.estimates.update()
+        ..where((t) => t.id.equals(estimateId))).write(EstimatesCompanion(
+          status: const Value('accepted'),
+          convertedInvoiceId: Value(invoiceId),
+          updatedAt: Value(now.millisecondsSinceEpoch),
+        ));
+    });
+
+    return invoiceId;
   }
 
   Future<List<domain.EstimateItem>> _getEstimateItems(String estimateId) async {
-    final rows = await (_db.estimateItems.select()
-      ..where((t) => t.estimateId.equals(estimateId))).get();
-    final result = <domain.EstimateItem>[];
-    for (final r in rows) {
-      final map = _itemRowToMap(r);
-      // Populate product_name from products table
-      if (r.productId != null) {
-        final product = await (_db.products.select()
-          ..where((t) => t.id.equals(r.productId!))).getSingleOrNull();
-        if (product != null) {
-          map['product_name'] = product.name;
-        }
-      }
-      result.add(EstimateItemModel.fromMap(map).toEntity());
-    }
-    return result;
+    final query = _db.select(_db.estimateItems).join([
+      leftOuterJoin(_db.products, _db.products.id.equalsExp(_db.estimateItems.productId)),
+    ])..where(_db.estimateItems.estimateId.equals(estimateId));
+
+    final rows = await query.get();
+    return rows.map((row) {
+      final item = row.readTable(_db.estimateItems);
+      final product = row.readTableOrNull(_db.products);
+      final map = _itemRowToMap(item);
+      if (product != null) map['product_name'] = product.name;
+      return EstimateItemModel.fromMap(map).toEntity();
+    }).toList();
   }
 
   Map<String, dynamic> _rowToMap(Estimate row) {

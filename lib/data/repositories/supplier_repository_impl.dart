@@ -12,24 +12,24 @@ class SupplierRepositoryImpl implements SupplierRepository {
   @override
   Future<List<domain.Supplier>> getAllSuppliers(String businessId, {String? searchQuery, int page = 1, int pageSize = 20}) async {
     final offset = (page - 1) * pageSize;
-    var allRows = await (_db.suppliers.select()
+    final query = _db.select(_db.suppliers)
       ..where((t) => t.businessId.equals(businessId))
-      ..where((t) => t.deletedAt.isNull())).get();
-    var rows = allRows;
+      ..where((t) => t.deletedAt.isNull());
 
     if (searchQuery != null && searchQuery.isNotEmpty) {
-      final query = searchQuery.toLowerCase();
-      rows = rows.where((r) =>
-        r.name.toLowerCase().contains(query) ||
-        (r.email?.toLowerCase().contains(query) ?? false) ||
-        (r.phone?.contains(query) ?? false)
-      ).toList();
+      final term = '%$searchQuery%';
+      query.where((t) =>
+        t.name.like(term) |
+        t.email.like(term) |
+        t.phone.like(term)
+      );
     }
 
-    rows.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-    final paged = rows.skip(offset).take(pageSize).toList();
+    query.orderBy([(t) => OrderingTerm(expression: t.createdAt, mode: OrderingMode.desc)]);
+    query.limit(pageSize, offset: offset);
 
-    return paged.map(_toEntity).toList();
+    final rows = await query.get();
+    return rows.map(_toEntity).toList();
   }
 
   @override
@@ -73,14 +73,17 @@ class SupplierRepositoryImpl implements SupplierRepository {
         contactPerson: Value(supplier.contactPerson),
         notes: Value(supplier.notes),
         updatedAt: Value(now.millisecondsSinceEpoch),
+        deletedAt: Value(supplier.deletedAt?.millisecondsSinceEpoch),
       ));
     return supplier.copyWith(updatedAt: now);
   }
 
   @override
   Future<void> deleteSupplier(String id) async {
-    await (_db.suppliers.delete()
-      ..where((t) => t.id.equals(id))).go();
+    await (_db.suppliers.update()
+      ..where((t) => t.id.equals(id))).write(SuppliersCompanion(
+        deletedAt: Value(DateTime.now().millisecondsSinceEpoch),
+      ));
   }
 
   domain.Supplier _toEntity(Supplier row) {

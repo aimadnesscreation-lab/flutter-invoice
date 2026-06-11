@@ -13,85 +13,102 @@ class PaymentRepositoryImpl implements PaymentRepository {
   @override
   Future<List<domain.Payment>> getAllPayments(String businessId, {String? invoiceId, int page = 1, int pageSize = 20}) async {
     final offset = (page - 1) * pageSize;
-    var allRows = await (_db.payments.select()
-      ..where((t) => t.businessId.equals(businessId))).get();
-    var rows = allRows;
+    final query = _db.select(_db.payments).join([
+      leftOuterJoin(_db.invoices, _db.invoices.id.equalsExp(_db.payments.invoiceId)),
+      leftOuterJoin(_db.customers, _db.customers.id.equalsExp(_db.payments.customerId)),
+    ])
+      ..where(_db.payments.businessId.equals(businessId));
 
     if (invoiceId != null) {
-      rows = rows.where((r) => r.invoiceId == invoiceId).toList();
+      query.where(_db.payments.invoiceId.equals(invoiceId));
     }
 
-    rows.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-    final paged = rows.skip(offset).take(pageSize).toList();
+    query.orderBy([OrderingTerm(expression: _db.payments.createdAt, mode: OrderingMode.desc)]);
+    query.limit(pageSize, offset: offset);
 
-    final result = <domain.Payment>[];
-    for (final r in paged) {
-      result.add(await _toEntity(r));
-    }
-    return result;
+    final rows = await query.get();
+    return rows.map((row) {
+      final payment = row.readTable(_db.payments);
+      final invoice = row.readTableOrNull(_db.invoices);
+      final customer = row.readTableOrNull(_db.customers);
+      
+      final map = _rowToMap(payment);
+      if (invoice != null) {
+        map['invoice_number'] = invoice.invoiceNumber;
+      }
+      if (customer != null) {
+        map['customer_name'] = customer.name;
+      }
+      return PaymentModel.fromMap(map).toEntity();
+    }).toList();
   }
 
   @override
   Future<domain.Payment?> getPaymentById(String id) async {
-    final row = await (_db.payments.select()
-      ..where((t) => t.id.equals(id))).getSingleOrNull();
+    final query = _db.select(_db.payments).join([
+      leftOuterJoin(_db.invoices, _db.invoices.id.equalsExp(_db.payments.invoiceId)),
+      leftOuterJoin(_db.customers, _db.customers.id.equalsExp(_db.payments.customerId)),
+    ])
+      ..where(_db.payments.id.equals(id));
+
+    final row = await query.getSingleOrNull();
     if (row == null) return null;
-    return _toEntity(row);
+
+    final payment = row.readTable(_db.payments);
+    final invoice = row.readTableOrNull(_db.invoices);
+    final customer = row.readTableOrNull(_db.customers);
+    
+    final map = _rowToMap(payment);
+    if (invoice != null) {
+      map['invoice_number'] = invoice.invoiceNumber;
+    }
+    if (customer != null) {
+      map['customer_name'] = customer.name;
+    }
+    return PaymentModel.fromMap(map).toEntity();
   }
 
   @override
   Future<domain.Payment> createPayment(domain.Payment payment) async {
     final id = const Uuid().v4();
     final now = DateTime.now();
-    final model = PaymentModel(
-      id: id,
-      businessId: payment.businessId,
-      invoiceId: payment.invoiceId,
-      invoiceNumber: payment.invoiceNumber,
-      customerId: payment.customerId,
-      customerName: payment.customerName,
-      paymentNumber: payment.paymentNumber,
-      amount: payment.amount,
-      method: payment.method,
-      reference: payment.reference,
-      notes: payment.notes,
-      isRefund: payment.isRefund,
-      paymentDate: payment.paymentDate,
-      createdAt: now,
-    );
-    await _db.into(_db.payments).insert(PaymentsCompanion.insert(
-      id: model.id,
-      businessId: model.businessId,
-      invoiceId: Value(model.invoiceId),
-      customerId: Value(model.customerId),
-      paymentNumber: model.paymentNumber,
-      amount: model.amount,
-      method: model.method,
-      reference: Value(model.reference),
-      notes: Value(model.notes),
-      isRefund: Value(model.isRefund),
-      paymentDate: model.paymentDate.millisecondsSinceEpoch,
-      createdAt: model.createdAt.millisecondsSinceEpoch,
-    ));
+    
+    return await _db.transaction(() async {
+      await _db.into(_db.payments).insert(PaymentsCompanion.insert(
+        id: id,
+        businessId: payment.businessId,
+        invoiceId: Value(payment.invoiceId),
+        customerId: Value(payment.customerId),
+        paymentNumber: payment.paymentNumber,
+        amount: payment.amount,
+        method: payment.method,
+        reference: Value(payment.reference),
+        notes: Value(payment.notes),
+        isRefund: Value(payment.isRefund),
+        paymentDate: payment.paymentDate.millisecondsSinceEpoch,
+        createdAt: now.millisecondsSinceEpoch,
+      ));
 
-    // Update invoice paid amount
-    if (payment.invoiceId != null && !payment.isRefund) {
-      final invoiceRow = await (_db.invoices.select()
-        ..where((t) => t.id.equals(payment.invoiceId!))).getSingleOrNull();
-      if (invoiceRow != null) {
-        final newPaid = invoiceRow.paidAmount + payment.amount;
-        final newBalance = invoiceRow.grandTotal - newPaid;
-        final newStatus = newBalance <= 0 ? 'paid' : (newPaid > 0 ? 'partial' : invoiceRow.status);
-        await (_db.invoices.update()
-          ..where((t) => t.id.equals(payment.invoiceId!))).write(InvoicesCompanion(
-            paidAmount: Value(newPaid),
-            balanceDue: Value(newBalance > 0 ? newBalance : 0),
-            status: Value(newStatus),
-          ));
+      // Update invoice paid amount
+      if (payment.invoiceId != null && !payment.isRefund) {
+        final invoiceRow = await (_db.invoices.select()
+          ..where((t) => t.id.equals(payment.invoiceId!))).getSingleOrNull();
+        if (invoiceRow != null) {
+          final newPaid = invoiceRow.paidAmount + payment.amount;
+          final newBalance = invoiceRow.grandTotal - newPaid;
+          final newStatus = newBalance <= 0 ? 'paid' : (newPaid > 0 ? 'partial' : invoiceRow.status);
+          await (_db.invoices.update()
+            ..where((t) => t.id.equals(payment.invoiceId!))).write(InvoicesCompanion(
+              paidAmount: Value(newPaid),
+              balanceDue: Value(newBalance > 0 ? newBalance : 0),
+              status: Value(newStatus),
+            ));
+        }
       }
-    }
 
-    return model.toEntity();
+      final created = await getPaymentById(id);
+      return created!;
+    });
   }
 
   @override
@@ -102,52 +119,51 @@ class PaymentRepositoryImpl implements PaymentRepository {
 
   @override
   Future<double> getTotalPayments(String businessId) async {
-    final rows = await (_db.payments.select()
-      ..where((t) => t.businessId.equals(businessId))).get();
-    return rows
-        .where((r) => !r.isRefund)
-        .fold<double>(0.0, (sum, r) => sum + r.amount);
+    final amountExp = _db.payments.amount.sum();
+    final query = _db.selectOnly(_db.payments)
+      ..addColumns([amountExp])
+      ..where(_db.payments.businessId.equals(businessId))
+      ..where(_db.payments.isRefund.equals(false));
+    
+    final row = await query.getSingle();
+    return row.read(amountExp) ?? 0.0;
   }
 
   @override
   Future<double> getInvoicePaidAmount(String invoiceId) async {
-    final rows = await (_db.payments.select()
-      ..where((t) => t.invoiceId.equals(invoiceId))).get();
-    return rows
-        .where((r) => !r.isRefund)
-        .fold<double>(0.0, (sum, r) => sum + r.amount);
+    final amountExp = _db.payments.amount.sum();
+    final query = _db.selectOnly(_db.payments)
+      ..addColumns([amountExp])
+      ..where(_db.payments.invoiceId.equals(invoiceId))
+      ..where(_db.payments.isRefund.equals(false));
+    
+    final row = await query.getSingle();
+    return row.read(amountExp) ?? 0.0;
   }
 
   @override
   Future<List<domain.Payment>> getPaymentsByInvoiceId(String invoiceId) async {
-    final rows = await (_db.payments.select()
-      ..where((t) => t.invoiceId.equals(invoiceId))).get();
-    final result = <domain.Payment>[];
-    for (final r in rows) {
-      result.add(await _toEntity(r));
-    }
-    return result;
-  }
+    final query = _db.select(_db.payments).join([
+      leftOuterJoin(_db.invoices, _db.invoices.id.equalsExp(_db.payments.invoiceId)),
+      leftOuterJoin(_db.customers, _db.customers.id.equalsExp(_db.payments.customerId)),
+    ])
+      ..where(_db.payments.invoiceId.equals(invoiceId));
 
-  Future<domain.Payment> _toEntity(Payment row) async {
-    final map = _rowToMap(row);
-    // Populate denormalized fields from related tables
-    if (row.invoiceId != null) {
-      final invoice = await (_db.invoices.select()
-        ..where((t) => t.id.equals(row.invoiceId!))).getSingleOrNull();
+    final rows = await query.get();
+    return rows.map((row) {
+      final payment = row.readTable(_db.payments);
+      final invoice = row.readTableOrNull(_db.invoices);
+      final customer = row.readTableOrNull(_db.customers);
+      
+      final map = _rowToMap(payment);
       if (invoice != null) {
         map['invoice_number'] = invoice.invoiceNumber;
-        // Also try to get customer name from the invoice's customer
-        if (invoice.customerId != null) {
-          final customer = await (_db.customers.select()
-            ..where((t) => t.id.equals(invoice.customerId!))).getSingleOrNull();
-          if (customer != null) {
-            map['customer_name'] = customer.name;
-          }
-        }
       }
-    }
-    return PaymentModel.fromMap(map).toEntity();
+      if (customer != null) {
+        map['customer_name'] = customer.name;
+      }
+      return PaymentModel.fromMap(map).toEntity();
+    }).toList();
   }
 
   Map<String, dynamic> _rowToMap(Payment row) {

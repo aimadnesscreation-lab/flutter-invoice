@@ -26,8 +26,39 @@ class _InvoiceFormPageState extends ConsumerState<InvoiceFormPage> {
   DateTime _dueDate = DateTime.now().add(const Duration(days: 30));
   double _discountPercent = 0;
   double _taxPercent = 0;
+  bool _isLoading = false;
 
   bool get isEditing => widget.invoiceId != null;
+
+  @override
+  void initState() {
+    super.initState();
+    if (isEditing) {
+      _loadInvoice();
+    }
+  }
+
+  Future<void> _loadInvoice() async {
+    setState(() => _isLoading = true);
+    try {
+      final invoice = await ref.read(invoiceRepositoryProvider).getInvoiceById(widget.invoiceId!);
+      if (invoice != null && mounted) {
+        setState(() {
+          _selectedCustomerId = invoice.customerId;
+          _selectedCustomerName = invoice.customerName;
+          _invoiceDate = invoice.invoiceDate;
+          _dueDate = invoice.dueDate;
+          _items.clear();
+          _items.addAll(invoice.items);
+          _discountPercent = invoice.discountPercent;
+          _taxPercent = invoice.taxPercent;
+          _noteController.text = invoice.notes ?? '';
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   @override
   void dispose() {
@@ -42,8 +73,14 @@ class _InvoiceFormPageState extends ConsumerState<InvoiceFormPage> {
 
   @override
   Widget build(BuildContext context) {
-    final customersAsync = ref.watch(customersProvider('default'));
-    final productsAsync = ref.watch(productsProvider('default'));
+    final business = ref.watch(activeBusinessProvider);
+    final businessId = business?.id ?? 'default';
+    final customersAsync = ref.watch(customersProvider(businessId));
+    final productsAsync = ref.watch(productsProvider(businessId));
+
+    if (_isLoading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -355,32 +392,58 @@ class _InvoiceFormPageState extends ConsumerState<InvoiceFormPage> {
   void _saveInvoice() async {
     if (!_isFormValid) return;
 
-    final repo = ref.read(invoiceRepositoryProvider);
-    final invoiceNumber = await repo.generateInvoiceNumber('default', 'INV-');
+    setState(() => _isLoading = true);
+    try {
+      final business = ref.read(activeBusinessProvider);
+      final businessId = business?.id ?? 'default';
+      final repo = ref.read(invoiceRepositoryProvider);
+      
+      String invoiceNumber;
+      DateTime createdAt = DateTime.now();
+      
+      if (isEditing) {
+        final existing = await repo.getInvoiceById(widget.invoiceId!);
+        invoiceNumber = existing?.invoiceNumber ?? await repo.generateInvoiceNumber(businessId, 'INV-');
+        createdAt = existing?.createdAt ?? DateTime.now();
+      } else {
+        invoiceNumber = await repo.generateInvoiceNumber(businessId, 'INV-');
+      }
 
-    final invoice = Invoice(
-      id: const Uuid().v4(),
-      businessId: 'default',
-      customerId: _selectedCustomerId,
-      customerName: _selectedCustomerName,
-      invoiceNumber: invoiceNumber,
-      invoiceDate: _invoiceDate,
-      dueDate: _dueDate,
-      subtotal: _subtotal,
-      discountPercent: _discountPercent,
-      discountAmount: _discountAmount,
-      taxPercent: _taxPercent,
-      taxAmount: _taxAmount,
-      grandTotal: _grandTotal,
-      balanceDue: _grandTotal,
-      notes: _noteController.text.trim().isEmpty ? null : _noteController.text.trim(),
-      createdAt: DateTime.now(),
-      updatedAt: DateTime.now(),
-    );
+      final invoice = Invoice(
+        id: isEditing ? widget.invoiceId! : const Uuid().v4(),
+        businessId: businessId,
+        customerId: _selectedCustomerId,
+        customerName: _selectedCustomerName,
+        invoiceNumber: invoiceNumber,
+        invoiceDate: _invoiceDate,
+        dueDate: _dueDate,
+        subtotal: _subtotal,
+        discountPercent: _discountPercent,
+        discountAmount: _discountAmount,
+        taxPercent: _taxPercent,
+        taxAmount: _taxAmount,
+        grandTotal: _grandTotal,
+        balanceDue: _grandTotal,
+        notes: _noteController.text.trim().isEmpty ? null : _noteController.text.trim(),
+        createdAt: createdAt,
+        updatedAt: DateTime.now(),
+      );
 
-    await repo.createInvoice(invoice, _items);
-    ref.invalidate(invoicesProvider('default'));
-    if (!mounted) return;
-    Navigator.of(context).pop();
+      if (isEditing) {
+        await repo.updateInvoice(invoice, _items);
+      } else {
+        await repo.createInvoice(invoice, _items);
+      }
+      
+      ref.invalidate(invoicesProvider(businessId));
+      if (!mounted) return;
+      Navigator.of(context).pop();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error saving invoice: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 }

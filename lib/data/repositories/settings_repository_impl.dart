@@ -16,16 +16,11 @@ class SettingsRepositoryImpl implements SettingsRepository {
 
   @override
   Future<void> setSetting(String key, String value) async {
-    final now = DateTime.now();
-    final existing = await getSetting(key);
-    if (existing != null) {
-      await (_db.appSettings.delete()
-        ..where((t) => t.key.equals(key))).go();
-    }
-    await _db.into(_db.appSettings).insert(AppSettingsCompanion.insert(
-      key: key,
-      value: value,
-      updatedAt: now.millisecondsSinceEpoch,
+    final now = DateTime.now().millisecondsSinceEpoch;
+    await _db.into(_db.appSettings).insertOnConflictUpdate(AppSettingsCompanion(
+      key: Value(key),
+      value: Value(value),
+      updatedAt: Value(now),
     ));
   }
 

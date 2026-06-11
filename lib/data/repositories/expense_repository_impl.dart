@@ -7,34 +7,34 @@ import 'package:invoice_pro/domain/repositories/expense_repository.dart';
 
 class ExpenseRepositoryImpl implements ExpenseRepository {
   final AppDatabase _db;
-  final Map<String, int> _counters = {};
 
   ExpenseRepositoryImpl(this._db);
 
   @override
   Future<List<domain.Expense>> getAllExpenses(String businessId, {String? category, String? searchQuery, int page = 1, int pageSize = 20}) async {
     final offset = (page - 1) * pageSize;
-    var allRows = await (_db.expenses.select()
+    final query = _db.select(_db.expenses)
       ..where((t) => t.businessId.equals(businessId))
-      ..where((t) => t.deletedAt.isNull())).get();
-    var rows = allRows;
+      ..where((t) => t.deletedAt.isNull());
 
-    if (category != null) {
-      rows = rows.where((r) => r.category == category).toList();
+    if (category != null && category.isNotEmpty) {
+      query.where((t) => t.category.equals(category));
     }
+
     if (searchQuery != null && searchQuery.isNotEmpty) {
-      final query = searchQuery.toLowerCase();
-      rows = rows.where((r) =>
-        r.expenseNumber.toLowerCase().contains(query) ||
-        r.category.toLowerCase().contains(query) ||
-        (r.notes?.toLowerCase().contains(query) ?? false)
-      ).toList();
+      final term = '%$searchQuery%';
+      query.where((t) =>
+        t.expenseNumber.like(term) |
+        t.category.like(term) |
+        t.notes.like(term)
+      );
     }
 
-    rows.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-    final paged = rows.skip(offset).take(pageSize).toList();
+    query.orderBy([(t) => OrderingTerm(expression: t.createdAt, mode: OrderingMode.desc)]);
+    query.limit(pageSize, offset: offset);
 
-    return paged.map((r) => ExpenseModel.fromMap(_rowToMap(r)).toEntity()).toList();
+    final rows = await query.get();
+    return rows.map((r) => ExpenseModel.fromMap(_rowToMap(r)).toEntity()).toList();
   }
 
   @override
@@ -90,6 +90,7 @@ class ExpenseRepositoryImpl implements ExpenseRepository {
       receiptPath: model.receiptPath,
       createdAt: model.createdAt,
       updatedAt: DateTime.now(),
+      deletedAt: model.deletedAt,
     );
     await (_db.expenses.update()
       ..where((t) => t.id.equals(updated.id))).write(ExpensesCompanion(
@@ -100,67 +101,92 @@ class ExpenseRepositoryImpl implements ExpenseRepository {
         notes: Value(updated.notes),
         receiptPath: Value(updated.receiptPath),
         updatedAt: Value(updated.updatedAt.millisecondsSinceEpoch),
+        deletedAt: Value(updated.deletedAt?.millisecondsSinceEpoch),
       ));
     return updated.toEntity();
   }
 
   @override
   Future<void> deleteExpense(String id) async {
-    await (_db.expenses.delete()
-      ..where((t) => t.id.equals(id))).go();
+    await (_db.expenses.update()
+      ..where((t) => t.id.equals(id))).write(ExpensesCompanion(
+        deletedAt: Value(DateTime.now().millisecondsSinceEpoch),
+      ));
   }
 
   @override
-  Future<void> restoreExpense(String id) async {}
+  Future<void> restoreExpense(String id) async {
+    await (_db.expenses.update()
+      ..where((t) => t.id.equals(id))).write(const ExpensesCompanion(
+        deletedAt: Value(null),
+      ));
+  }
 
   @override
   Future<double> getTotalExpenses(String businessId) async {
-    final rows = await (_db.expenses.select()
-      ..where((t) => t.businessId.equals(businessId))
-      ..where((t) => t.deletedAt.isNull())).get();
-    return rows.fold<double>(0.0, (sum, r) => sum + r.amount);
+    final amountExp = _db.expenses.amount.sum();
+    final query = _db.selectOnly(_db.expenses)
+      ..addColumns([amountExp])
+      ..where(_db.expenses.businessId.equals(businessId))
+      ..where(_db.expenses.deletedAt.isNull());
+    
+    final row = await query.getSingle();
+    return row.read(amountExp) ?? 0.0;
   }
 
   @override
   Future<double> getMonthlyExpenses(String businessId) async {
     final now = DateTime.now();
     final startOfMonth = DateTime(now.year, now.month, 1).millisecondsSinceEpoch;
-    final rows = await (_db.expenses.select()
-      ..where((t) => t.businessId.equals(businessId))
-      ..where((t) => t.deletedAt.isNull())).get();
-    return rows
-        .where((r) => r.expenseDate >= startOfMonth)
-        .fold<double>(0.0, (sum, r) => sum + r.amount);
+    
+    final amountExp = _db.expenses.amount.sum();
+    final query = _db.selectOnly(_db.expenses)
+      ..addColumns([amountExp])
+      ..where(_db.expenses.businessId.equals(businessId))
+      ..where(_db.expenses.deletedAt.isNull())
+      ..where(_db.expenses.expenseDate.isBiggerOrEqualValue(startOfMonth));
+    
+    final row = await query.getSingle();
+    return row.read(amountExp) ?? 0.0;
   }
 
   @override
   Future<double> getYearlyExpenses(String businessId) async {
     final now = DateTime.now();
     final startOfYear = DateTime(now.year, 1, 1).millisecondsSinceEpoch;
-    final rows = await (_db.expenses.select()
-      ..where((t) => t.businessId.equals(businessId))
-      ..where((t) => t.deletedAt.isNull())).get();
-    return rows
-        .where((r) => r.expenseDate >= startOfYear)
-        .fold<double>(0.0, (sum, r) => sum + r.amount);
+    
+    final amountExp = _db.expenses.amount.sum();
+    final query = _db.selectOnly(_db.expenses)
+      ..addColumns([amountExp])
+      ..where(_db.expenses.businessId.equals(businessId))
+      ..where(_db.expenses.deletedAt.isNull())
+      ..where(_db.expenses.expenseDate.isBiggerOrEqualValue(startOfYear));
+    
+    final row = await query.getSingle();
+    return row.read(amountExp) ?? 0.0;
   }
 
   @override
   Future<Map<String, double>> getExpenseByCategory(String businessId) async {
-    final rows = await (_db.expenses.select()
-      ..where((t) => t.businessId.equals(businessId))
-      ..where((t) => t.deletedAt.isNull())).get();
-    final Map<String, double> result = {};
-    for (final r in rows) {
-      result[r.category] = (result[r.category] ?? 0) + r.amount;
-    }
-    return result;
+    final amountExp = _db.expenses.amount.sum();
+    final query = _db.selectOnly(_db.expenses)
+      ..addColumns([_db.expenses.category, amountExp])
+      ..where(_db.expenses.businessId.equals(businessId))
+      ..where(_db.expenses.deletedAt.isNull())
+      ..groupBy([_db.expenses.category]);
+    
+    final rows = await query.get();
+    return {for (final r in rows) r.read(_db.expenses.category)!: r.read(amountExp)!};
   }
 
   @override
   Future<String> generateExpenseNumber(String businessId, String prefix) async {
-    _counters[businessId] = (_counters[businessId] ?? 0) + 1;
-    return '$prefix${_counters[businessId]!.toString().padLeft(6, '0')}';
+    final query = _db.selectOnly(_db.expenses)
+      ..addColumns([_db.expenses.id.count()])
+      ..where(_db.expenses.businessId.equals(businessId));
+    final count = await query.map((row) => row.read(_db.expenses.id.count())).getSingle();
+    final nextNumber = (count ?? 0) + 1;
+    return '$prefix${nextNumber.toString().padLeft(6, '0')}';
   }
 
   Map<String, dynamic> _rowToMap(Expense row) {

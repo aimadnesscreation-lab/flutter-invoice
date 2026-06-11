@@ -7,72 +7,88 @@ import 'package:invoice_pro/domain/repositories/credit_note_repository.dart';
 
 class CreditNoteRepositoryImpl implements CreditNoteRepository {
   final AppDatabase _db;
-  final Map<String, int> _counters = {};
 
   CreditNoteRepositoryImpl(this._db);
 
   @override
   Future<List<domain.CreditNote>> getAllCreditNotes(String businessId, {String? invoiceId, int page = 1, int pageSize = 20}) async {
     final offset = (page - 1) * pageSize;
-    var allRows = await (_db.creditNotes.select()
-      ..where((t) => t.businessId.equals(businessId))).get();
-    var rows = allRows;
+    final query = _db.select(_db.creditNotes).join([
+      leftOuterJoin(_db.invoices, _db.invoices.id.equalsExp(_db.creditNotes.invoiceId)),
+      leftOuterJoin(_db.customers, _db.customers.id.equalsExp(_db.creditNotes.customerId)),
+    ])
+      ..where(_db.creditNotes.businessId.equals(businessId));
 
     if (invoiceId != null) {
-      rows = rows.where((r) => r.invoiceId == invoiceId).toList();
+      query.where(_db.creditNotes.invoiceId.equals(invoiceId));
     }
 
-    rows.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-    final paged = rows.skip(offset).take(pageSize).toList();
+    query.orderBy([OrderingTerm(expression: _db.creditNotes.createdAt, mode: OrderingMode.desc)]);
+    query.limit(pageSize, offset: offset);
 
-    final result = <domain.CreditNote>[];
-    for (final r in paged) {
-      result.add(await _toEntity(r));
-    }
-    return result;
+    final rows = await query.get();
+    return rows.map((row) {
+      final creditNote = row.readTable(_db.creditNotes);
+      final invoice = row.readTableOrNull(_db.invoices);
+      final customer = row.readTableOrNull(_db.customers);
+      
+      final map = _rowToMap(creditNote);
+      if (invoice != null) {
+        map['invoice_number'] = invoice.invoiceNumber;
+      }
+      if (customer != null) {
+        map['customer_name'] = customer.name;
+      }
+      return CreditNoteModel.fromMap(map).toEntity();
+    }).toList();
   }
 
   @override
   Future<domain.CreditNote?> getCreditNoteById(String id) async {
-    final row = await (_db.creditNotes.select()
-      ..where((t) => t.id.equals(id))).getSingleOrNull();
+    final query = _db.select(_db.creditNotes).join([
+      leftOuterJoin(_db.invoices, _db.invoices.id.equalsExp(_db.creditNotes.invoiceId)),
+      leftOuterJoin(_db.customers, _db.customers.id.equalsExp(_db.creditNotes.customerId)),
+    ])
+      ..where(_db.creditNotes.id.equals(id));
+
+    final row = await query.getSingleOrNull();
     if (row == null) return null;
-    return _toEntity(row);
+
+    final creditNote = row.readTable(_db.creditNotes);
+    final invoice = row.readTableOrNull(_db.invoices);
+    final customer = row.readTableOrNull(_db.customers);
+    
+    final map = _rowToMap(creditNote);
+    if (invoice != null) {
+      map['invoice_number'] = invoice.invoiceNumber;
+    }
+    if (customer != null) {
+      map['customer_name'] = customer.name;
+    }
+    return CreditNoteModel.fromMap(map).toEntity();
   }
 
   @override
   Future<domain.CreditNote> createCreditNote(domain.CreditNote creditNote) async {
     final id = const Uuid().v4();
     final now = DateTime.now();
-    final model = CreditNoteModel(
+    
+    await _db.into(_db.creditNotes).insert(CreditNotesCompanion.insert(
       id: id,
       businessId: creditNote.businessId,
-      invoiceId: creditNote.invoiceId,
-      invoiceNumber: creditNote.invoiceNumber,
-      customerId: creditNote.customerId,
-      customerName: creditNote.customerName,
+      invoiceId: Value(creditNote.invoiceId),
+      customerId: Value(creditNote.customerId),
       creditNoteNumber: creditNote.creditNoteNumber,
       reason: creditNote.reason,
       amount: creditNote.amount,
-      creditNoteDate: creditNote.creditNoteDate,
-      notes: creditNote.notes,
-      createdAt: now,
-      updatedAt: now,
-    );
-    await _db.into(_db.creditNotes).insert(CreditNotesCompanion.insert(
-      id: model.id,
-      businessId: model.businessId,
-      invoiceId: Value(model.invoiceId),
-      customerId: Value(model.customerId),
-      creditNoteNumber: model.creditNoteNumber,
-      reason: model.reason,
-      amount: model.amount,
-      creditNoteDate: model.creditNoteDate.millisecondsSinceEpoch,
-      notes: Value(model.notes),
-      createdAt: model.createdAt.millisecondsSinceEpoch,
-      updatedAt: model.updatedAt.millisecondsSinceEpoch,
+      creditNoteDate: creditNote.creditNoteDate.millisecondsSinceEpoch,
+      notes: Value(creditNote.notes),
+      createdAt: now.millisecondsSinceEpoch,
+      updatedAt: now.millisecondsSinceEpoch,
     ));
-    return model.toEntity();
+    
+    final created = await getCreditNoteById(id);
+    return created!;
   }
 
   @override
@@ -83,28 +99,12 @@ class CreditNoteRepositoryImpl implements CreditNoteRepository {
 
   @override
   Future<String> generateCreditNoteNumber(String businessId, String prefix) async {
-    _counters[businessId] = (_counters[businessId] ?? 0) + 1;
-    return '$prefix${_counters[businessId]!.toString().padLeft(6, '0')}';
-  }
-
-  Future<domain.CreditNote> _toEntity(CreditNote row) async {
-    final map = _rowToMap(row);
-    // Populate denormalized fields from related tables
-    if (row.invoiceId != null) {
-      final invoice = await (_db.invoices.select()
-        ..where((t) => t.id.equals(row.invoiceId!))).getSingleOrNull();
-      if (invoice != null) {
-        map['invoice_number'] = invoice.invoiceNumber;
-      }
-    }
-    if (row.customerId != null) {
-      final customer = await (_db.customers.select()
-        ..where((t) => t.id.equals(row.customerId!))).getSingleOrNull();
-      if (customer != null) {
-        map['customer_name'] = customer.name;
-      }
-    }
-    return CreditNoteModel.fromMap(map).toEntity();
+    final query = _db.selectOnly(_db.creditNotes)
+      ..addColumns([_db.creditNotes.id.count()])
+      ..where(_db.creditNotes.businessId.equals(businessId));
+    final count = await query.map((row) => row.read(_db.creditNotes.id.count())).getSingle();
+    final nextNumber = (count ?? 0) + 1;
+    return '$prefix${nextNumber.toString().padLeft(6, '0')}';
   }
 
   Map<String, dynamic> _rowToMap(CreditNote row) {

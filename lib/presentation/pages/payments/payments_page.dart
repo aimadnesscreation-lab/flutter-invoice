@@ -9,7 +9,9 @@ class PaymentsPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final paymentsAsync = ref.watch(paymentsProvider('default'));
+    final business = ref.watch(activeBusinessProvider);
+    final businessId = business?.id ?? 'default';
+    final paymentsAsync = ref.watch(paymentsProvider(businessId));
 
     return Scaffold(
       appBar: AppBar(title: const Text('Payments')),

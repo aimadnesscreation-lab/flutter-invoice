@@ -1,5 +1,6 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:local_auth/local_auth.dart';
+import 'package:uuid/uuid.dart';
 import 'package:invoice_pro/core/constants/app_constants.dart';
 
 class SecurityService {
@@ -9,6 +10,17 @@ class SecurityService {
   SecurityService()
       : _secureStorage = const FlutterSecureStorage(),
         _localAuth = LocalAuthentication();
+
+  // Database Encryption Key
+  Future<String> getDatabaseKey() async {
+    const key = 'db_encryption_key';
+    String? dbKey = await _secureStorage.read(key: key);
+    if (dbKey == null) {
+      dbKey = const Uuid().v4();
+      await _secureStorage.write(key: key, value: dbKey);
+    }
+    return dbKey;
+  }
 
   // PIN Code
   Future<void> setPinCode(String pin) async {

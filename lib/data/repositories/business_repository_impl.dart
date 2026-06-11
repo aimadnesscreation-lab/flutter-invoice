@@ -13,17 +13,13 @@ class BusinessRepositoryImpl implements BusinessRepository {
 
   @override
   Future<List<Business>> getAllBusinesses() async {
-    final rows = await _db.businesses.select().get();
-    return rows.map((row) {
-      final map = _rowToMap(row);
-      return BusinessModel.fromMap(map).toEntity();
-    }).toList();
+    final rows = await (_db.select(_db.businesses)..where((t) => t.deletedAt.isNull())).get();
+    return rows.map((row) => BusinessModel.fromMap(_rowToMap(row)).toEntity()).toList();
   }
 
   @override
   Future<Business?> getBusinessById(String id) async {
-    final rows = await _db.businesses.select().get();
-    final row = rows.where((r) => r.id == id).firstOrNull;
+    final row = await (_db.select(_db.businesses)..where((t) => t.id.equals(id))).getSingleOrNull();
     if (row == null) return null;
     return BusinessModel.fromMap(_rowToMap(row)).toEntity();
   }
@@ -32,30 +28,8 @@ class BusinessRepositoryImpl implements BusinessRepository {
   Future<Business> createBusiness(Business business) async {
     final id = business.id.isEmpty ? const Uuid().v4() : business.id;
     final now = DateTime.now();
-    final model = BusinessModel(
-      id: id,
-      name: business.name,
-      logoPath: business.logoPath,
-      address: business.address,
-      phone: business.phone,
-      email: business.email,
-      taxNumber: business.taxNumber,
-      currency: business.currency,
-      currencySymbol: business.currencySymbol,
-      defaultTaxRate: business.defaultTaxRate,
-      invoicePrefix: business.invoicePrefix,
-      estimatePrefix: business.estimatePrefix,
-      purchaseOrderPrefix: business.purchaseOrderPrefix,
-      creditNotePrefix: business.creditNotePrefix,
-      expensePrefix: business.expensePrefix,
-      notes: business.notes,
-      dateFormat: business.dateFormat,
-      numberFormat: business.numberFormat,
-      themeMode: business.themeMode,
-      createdAt: business.createdAt.isBefore(DateTime(2020)) ? now : business.createdAt,
-      updatedAt: now,
-      deletedAt: business.deletedAt,
-    );
+    final model = BusinessModel.fromEntity(business.copyWith(id: id, createdAt: now, updatedAt: now));
+    
     await _db.into(_db.businesses).insert(BusinessesCompanion.insert(
       id: model.id,
       name: model.name,
@@ -78,82 +52,82 @@ class BusinessRepositoryImpl implements BusinessRepository {
       themeMode: Value(model.themeMode),
       createdAt: model.createdAt.millisecondsSinceEpoch,
       updatedAt: model.updatedAt.millisecondsSinceEpoch,
-      deletedAt: Value(model.deletedAt?.millisecondsSinceEpoch),
     ));
     return model.toEntity();
   }
 
   @override
   Future<Business> updateBusiness(Business business) async {
-    final model = BusinessModel.fromEntity(business);
-    final updated = BusinessModel(
-      id: model.id,
-      name: model.name,
-      logoPath: model.logoPath,
-      address: model.address,
-      phone: model.phone,
-      email: model.email,
-      taxNumber: model.taxNumber,
-      currency: model.currency,
-      currencySymbol: model.currencySymbol,
-      defaultTaxRate: model.defaultTaxRate,
-      invoicePrefix: model.invoicePrefix,
-      estimatePrefix: model.estimatePrefix,
-      purchaseOrderPrefix: model.purchaseOrderPrefix,
-      creditNotePrefix: model.creditNotePrefix,
-      expensePrefix: model.expensePrefix,
-      notes: model.notes,
-      dateFormat: model.dateFormat,
-      numberFormat: model.numberFormat,
-      themeMode: model.themeMode,
-      createdAt: model.createdAt,
-      updatedAt: DateTime.now(),
-      deletedAt: model.deletedAt,
-    );
-    await (_db.businesses.update()
-      ..where((t) => t.id.equals(updated.id))).write(BusinessesCompanion(
-        name: Value(updated.name),
-        logoPath: Value(updated.logoPath),
-        address: Value(updated.address),
-        phone: Value(updated.phone),
-        email: Value(updated.email),
-        taxNumber: Value(updated.taxNumber),
-        currency: Value(updated.currency),
-        currencySymbol: Value(updated.currencySymbol),
-        defaultTaxRate: Value(updated.defaultTaxRate),
-        invoicePrefix: Value(updated.invoicePrefix),
-        estimatePrefix: Value(updated.estimatePrefix),
-        purchaseOrderPrefix: Value(updated.purchaseOrderPrefix),
-        creditNotePrefix: Value(updated.creditNotePrefix),
-        expensePrefix: Value(updated.expensePrefix),
-        notes: Value(updated.notes),
-        dateFormat: Value(updated.dateFormat),
-        numberFormat: Value(updated.numberFormat),
-        themeMode: Value(updated.themeMode),
-        updatedAt: Value(updated.updatedAt.millisecondsSinceEpoch),
-        deletedAt: Value(updated.deletedAt?.millisecondsSinceEpoch),
-      ));
-    return updated.toEntity();
+    final now = DateTime.now();
+    final model = BusinessModel.fromEntity(business.copyWith(updatedAt: now));
+    
+    await (_db.businesses.update()..where((t) => t.id.equals(model.id))).write(BusinessesCompanion(
+        name: Value(model.name),
+        logoPath: Value(model.logoPath),
+        address: Value(model.address),
+        phone: Value(model.phone),
+        email: Value(model.email),
+        taxNumber: Value(model.taxNumber),
+        currency: Value(model.currency),
+        currencySymbol: Value(model.currencySymbol),
+        defaultTaxRate: Value(model.defaultTaxRate),
+        invoicePrefix: Value(model.invoicePrefix),
+        estimatePrefix: Value(model.estimatePrefix),
+        purchaseOrderPrefix: Value(model.purchaseOrderPrefix),
+        creditNotePrefix: Value(model.creditNotePrefix),
+        expensePrefix: Value(model.expensePrefix),
+        notes: Value(model.notes),
+        dateFormat: Value(model.dateFormat),
+        numberFormat: Value(model.numberFormat),
+        themeMode: Value(model.themeMode),
+        updatedAt: Value(model.updatedAt.millisecondsSinceEpoch),
+        deletedAt: Value(model.deletedAt?.millisecondsSinceEpoch),
+    ));
+    return model.toEntity();
   }
 
   @override
   Future<void> deleteBusiness(String id) async {
-    await (_db.businesses.delete()
-      ..where((t) => t.id.equals(id))).go();
+    await (_db.businesses.update()..where((t) => t.id.equals(id))).write(
+      BusinessesCompanion(deletedAt: Value(DateTime.now().millisecondsSinceEpoch))
+    );
   }
 
   @override
   Future<void> restoreBusiness(String id) async {
-    // Implementation for restoring soft-deleted business
+    await (_db.businesses.update()..where((t) => t.id.equals(id))).write(
+      const BusinessesCompanion(deletedAt: Value(null))
+    );
   }
 
   @override
   Future<Business?> getActiveBusiness() async {
+    if (_activeBusiness != null) return _activeBusiness;
+    
+    final setting = await (_db.select(_db.appSettings)..where((t) => t.key.equals('active_business_id'))).getSingleOrNull();
+    if (setting != null) {
+      _activeBusiness = await getBusinessById(setting.value);
+    }
+    
+    if (_activeBusiness == null) {
+      final all = await getAllBusinesses();
+      if (all.isNotEmpty) {
+        _activeBusiness = all.first;
+        await setActiveBusiness(_activeBusiness!.id);
+      }
+    }
+    
     return _activeBusiness;
   }
 
   @override
   Future<void> setActiveBusiness(String id) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    await _db.into(_db.appSettings).insertOnConflictUpdate(AppSettingsCompanion(
+      key: const Value('active_business_id'),
+      value: Value(id),
+      updatedAt: Value(now),
+    ));
     _activeBusiness = await getBusinessById(id);
   }
 

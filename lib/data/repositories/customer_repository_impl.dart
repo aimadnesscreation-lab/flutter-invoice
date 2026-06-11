@@ -13,26 +13,24 @@ class CustomerRepositoryImpl implements CustomerRepository {
   @override
   Future<List<domain.Customer>> getAllCustomers(String businessId, {String? searchQuery, int page = 1, int pageSize = 20}) async {
     final offset = (page - 1) * pageSize;
-    var allRows = await (_db.customers.select()
+    final query = _db.select(_db.customers)
       ..where((t) => t.businessId.equals(businessId))
-      ..where((t) => t.deletedAt.isNull())).get();
-    var rows = allRows;
+      ..where((t) => t.deletedAt.isNull());
 
     if (searchQuery != null && searchQuery.isNotEmpty) {
-      final query = searchQuery.toLowerCase();
-      rows = rows.where((r) =>
-        r.name.toLowerCase().contains(query) ||
-        (r.email?.toLowerCase().contains(query) ?? false) ||
-        (r.phone?.contains(query) ?? false)
-      ).toList();
+      final term = '%$searchQuery%';
+      query.where((t) =>
+        t.name.like(term) |
+        t.email.like(term) |
+        t.phone.like(term)
+      );
     }
 
-    rows.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-    final paged = rows.skip(offset).take(pageSize).toList();
+    query.orderBy([(t) => OrderingTerm(expression: t.createdAt, mode: OrderingMode.desc)]);
+    query.limit(pageSize, offset: offset);
 
-    return paged.map((row) {
-      return CustomerModel.fromMap(_rowToMap(row)).toEntity();
-    }).toList();
+    final rows = await query.get();
+    return rows.map((row) => CustomerModel.fromMap(_rowToMap(row)).toEntity()).toList();
   }
 
   @override
@@ -106,30 +104,37 @@ class CustomerRepositoryImpl implements CustomerRepository {
 
   @override
   Future<void> deleteCustomer(String id) async {
-    await (_db.customers.delete()
-      ..where((t) => t.id.equals(id))).go();
+    await (_db.customers.update()
+      ..where((t) => t.id.equals(id))).write(CustomersCompanion(
+        deletedAt: Value(DateTime.now().millisecondsSinceEpoch),
+      ));
   }
 
   @override
   Future<void> restoreCustomer(String id) async {
-    // Implementation for restore
+    await (_db.customers.update()
+      ..where((t) => t.id.equals(id))).write(const CustomersCompanion(
+        deletedAt: Value(null),
+      ));
   }
 
   @override
   Future<int> getCustomerCount(String businessId) async {
-    final rows = await (_db.customers.select()
-      ..where((t) => t.businessId.equals(businessId))
-      ..where((t) => t.deletedAt.isNull())).get();
-    return rows.length;
+    final countExp = _db.customers.id.count();
+    final query = _db.selectOnly(_db.customers)
+      ..addColumns([countExp])
+      ..where(_db.customers.businessId.equals(businessId))
+      ..where(_db.customers.deletedAt.isNull());
+    
+    final row = await query.getSingle();
+    return row.read(countExp) ?? 0;
   }
 
   @override
   Future<Map<String, dynamic>> getCustomerStats(String businessId) async {
-    final customers = await (_db.customers.select()
-      ..where((t) => t.businessId.equals(businessId))
-      ..where((t) => t.deletedAt.isNull())).get();
+    final total = await getCustomerCount(businessId);
     return {
-      'total': customers.length,
+      'total': total,
     };
   }
 

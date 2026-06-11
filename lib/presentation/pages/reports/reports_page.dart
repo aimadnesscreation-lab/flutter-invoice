@@ -8,8 +8,10 @@ class ReportsPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final statsAsync = ref.watch(dashboardStatsProvider('default'));
-    final expensesAsync = ref.watch(expensesProvider('default'));
+    final business = ref.watch(activeBusinessProvider);
+    final businessId = business?.id ?? 'default';
+    final statsAsync = ref.watch(dashboardStatsProvider(businessId));
+    final expensesAsync = ref.watch(expensesProvider(businessId));
 
     return Scaffold(
       appBar: AppBar(title: const Text('Reports')),

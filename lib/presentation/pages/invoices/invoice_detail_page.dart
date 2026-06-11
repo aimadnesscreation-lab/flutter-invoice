@@ -12,7 +12,9 @@ class InvoiceDetailPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final invoicesAsync = ref.watch(invoicesProvider('default'));
+    final business = ref.watch(activeBusinessProvider);
+    final businessId = business?.id ?? 'default';
+    final invoicesAsync = ref.watch(invoicesProvider(businessId));
 
     return invoicesAsync.when(
       data: (invoices) {

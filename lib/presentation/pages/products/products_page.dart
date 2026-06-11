@@ -24,8 +24,10 @@ class _ProductsPageState extends ConsumerState<ProductsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final business = ref.watch(activeBusinessProvider);
+    final businessId = business?.id ?? 'default';
     final colorScheme = Theme.of(context).colorScheme;
-    final productsAsync = ref.watch(productsProvider('default'));
+    final productsAsync = ref.watch(productsProvider(businessId));
 
     return Scaffold(
       appBar: AppBar(
@@ -150,6 +152,8 @@ class _ProductsPageState extends ConsumerState<ProductsPage> {
   }
 
   void _showProductForm(BuildContext context, {Product? product}) {
+    final business = ref.read(activeBusinessProvider);
+    final businessId = business?.id ?? 'default';
     final nameController = TextEditingController(text: product?.name ?? '');
     final skuController = TextEditingController(text: product?.sku ?? '');
     final barcodeController = TextEditingController(text: product?.barcode ?? '');
@@ -210,7 +214,7 @@ class _ProductsPageState extends ConsumerState<ProductsPage> {
                     if (product == null) {
                       await repo.createProduct(Product(
                         id: const Uuid().v4(),
-                        businessId: 'default',
+                        businessId: businessId,
                         name: nameController.text.trim(),
                         sku: skuController.text.trim().isEmpty ? null : skuController.text.trim(),
                         barcode: barcodeController.text.trim().isEmpty ? null : barcodeController.text.trim(),
@@ -236,7 +240,7 @@ class _ProductsPageState extends ConsumerState<ProductsPage> {
                         unit: unitController.text.trim().isEmpty ? product.unit : unitController.text.trim(),
                       ));
                     }
-                    ref.invalidate(productsProvider('default'));
+                    ref.invalidate(productsProvider(businessId));
                     if (context.mounted) Navigator.pop(context);
                   },
                   child: Text(product == null ? 'Create Product' : 'Update Product'),
@@ -259,8 +263,10 @@ class _ProductsPageState extends ConsumerState<ProductsPage> {
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
           TextButton(
             onPressed: () async {
+              final business = ref.read(activeBusinessProvider);
+              final businessId = business?.id ?? 'default';
               await ref.read(productRepositoryProvider).deleteProduct(product.id);
-              ref.invalidate(productsProvider('default'));
+              ref.invalidate(productsProvider(businessId));
               if (context.mounted) Navigator.pop(context);
             },
             child: const Text('Delete', style: TextStyle(color: Colors.red)),

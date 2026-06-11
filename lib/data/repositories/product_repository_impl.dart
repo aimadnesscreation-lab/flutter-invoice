@@ -13,28 +13,28 @@ class ProductRepositoryImpl implements ProductRepository {
   @override
   Future<List<domain.Product>> getAllProducts(String businessId, {String? searchQuery, String? categoryId, int page = 1, int pageSize = 20}) async {
     final offset = (page - 1) * pageSize;
-    var allRows = await (_db.products.select()
+    final query = _db.select(_db.products)
       ..where((t) => t.businessId.equals(businessId))
-      ..where((t) => t.deletedAt.isNull())).get();
-    var rows = allRows;
+      ..where((t) => t.deletedAt.isNull());
 
     if (searchQuery != null && searchQuery.isNotEmpty) {
-      final query = searchQuery.toLowerCase();
-      rows = rows.where((r) =>
-        r.name.toLowerCase().contains(query) ||
-        (r.sku?.toLowerCase().contains(query) ?? false) ||
-        (r.barcode?.contains(query) ?? false)
-      ).toList();
+      final term = '%$searchQuery%';
+      query.where((t) =>
+        t.name.like(term) |
+        t.sku.like(term) |
+        t.barcode.like(term)
+      );
     }
 
     if (categoryId != null) {
-      rows = rows.where((r) => r.categoryId == categoryId).toList();
+      query.where((t) => t.categoryId.equals(categoryId));
     }
 
-    rows.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-    final paged = rows.skip(offset).take(pageSize).toList();
+    query.orderBy([(t) => OrderingTerm(expression: t.createdAt, mode: OrderingMode.desc)]);
+    query.limit(pageSize, offset: offset);
 
-    return paged.map((row) => ProductModel.fromMap(_rowToMap(row)).toEntity()).toList();
+    final rows = await query.get();
+    return rows.map((row) => ProductModel.fromMap(_rowToMap(row)).toEntity()).toList();
   }
 
   @override
@@ -135,43 +135,55 @@ class ProductRepositoryImpl implements ProductRepository {
 
   @override
   Future<void> deleteProduct(String id) async {
-    await (_db.products.delete()
-      ..where((t) => t.id.equals(id))).go();
+    await (_db.products.update()
+      ..where((t) => t.id.equals(id))).write(ProductsCompanion(
+        deletedAt: Value(DateTime.now().millisecondsSinceEpoch),
+      ));
   }
 
   @override
-  Future<void> restoreProduct(String id) async {}
+  Future<void> restoreProduct(String id) async {
+    await (_db.products.update()
+      ..where((t) => t.id.equals(id))).write(const ProductsCompanion(
+        deletedAt: Value(null),
+      ));
+  }
 
   @override
   Future<int> getProductCount(String businessId) async {
-    final rows = await (_db.products.select()
-      ..where((t) => t.businessId.equals(businessId))
-      ..where((t) => t.deletedAt.isNull())).get();
-    return rows.length;
+    final countExp = _db.products.id.count();
+    final query = _db.selectOnly(_db.products)
+      ..addColumns([countExp])
+      ..where(_db.products.businessId.equals(businessId))
+      ..where(_db.products.deletedAt.isNull());
+    
+    final row = await query.getSingle();
+    return row.read(countExp) ?? 0;
   }
 
   @override
   Future<List<domain.Product>> getLowStockProducts(String businessId, {int limit = 20}) async {
-    final allRows = await (_db.products.select()
+    final query = _db.select(_db.products)
       ..where((t) => t.businessId.equals(businessId))
-      ..where((t) => t.deletedAt.isNull())).get();
-    final rows = allRows
-        .where((r) => r.quantity <= r.reorderLevel && r.reorderLevel > 0)
-        .take(limit)
-        .toList();
+      ..where((t) => t.deletedAt.isNull())
+      ..where((t) => t.quantity.isSmallerOrEqual(t.reorderLevel))
+      ..where((t) => t.reorderLevel.isBiggerThanValue(0))
+      ..limit(limit);
+    
+    final rows = await query.get();
     return rows.map((r) => ProductModel.fromMap(_rowToMap(r)).toEntity()).toList();
   }
 
   @override
   Future<double> getInventoryValuation(String businessId) async {
-    final rows = await (_db.products.select()
-      ..where((t) => t.businessId.equals(businessId))
-      ..where((t) => t.deletedAt.isNull())).get();
-    double total = 0;
-    for (final r in rows) {
-      total += r.quantity * r.costPrice;
-    }
-    return total;
+    final valuationExp = (_db.products.quantity * _db.products.costPrice).sum();
+    final query = _db.selectOnly(_db.products)
+      ..addColumns([valuationExp])
+      ..where(_db.products.businessId.equals(businessId))
+      ..where(_db.products.deletedAt.isNull());
+    
+    final row = await query.getSingle();
+    return row.read(valuationExp) ?? 0.0;
   }
 
   Map<String, dynamic> _rowToMap(Product row) {
