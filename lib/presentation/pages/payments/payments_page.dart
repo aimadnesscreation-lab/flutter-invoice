@@ -123,7 +123,7 @@ class _PaymentsPageState extends ConsumerState<PaymentsPage> {
                   builder: (context, snapshot) {
                     final invoices = snapshot.data ?? [];
                     return DropdownButtonFormField<String?>(
-                      value: selectedInvoiceId,
+                      initialValue: selectedInvoiceId,
                       decoration: const InputDecoration(
                         labelText: 'Invoice (optional)',
                         prefixIcon: Icon(Icons.receipt),
