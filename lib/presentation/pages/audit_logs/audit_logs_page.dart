@@ -13,45 +13,16 @@ class AuditLogsPage extends ConsumerStatefulWidget {
 }
 
 class _AuditLogsPageState extends ConsumerState<AuditLogsPage> {
-  List<Map<String, dynamic>> _logs = [];
-  bool _isLoading = true;
   String? _selectedEntityType;
 
   @override
-  void initState() {
-    super.initState();
-    _loadLogs();
-  }
-
-  Future<void> _loadLogs() async {
-    setState(() => _isLoading = true);
-    try {
-      final db = sl<AppDatabase>();
-      final query = db.select(db.auditLogs)
-        ..orderBy([(t) => OrderingTerm(expression: t.createdAt, mode: OrderingMode.desc)])
-        ..limit(100);
-
-      if (_selectedEntityType != null) {
-        query.where((t) => t.entityType.equals(_selectedEntityType!));
-      }
-
-      final rows = await query.get();
-      _logs = rows.map((r) => {
-        'id': r.id,
-        'entityType': r.entityType,
-        'entityId': r.entityId,
-        'action': r.action,
-        'changes': r.changes,
-        'createdAt': DateTime.fromMillisecondsSinceEpoch(r.createdAt),
-      }).toList();
-    } catch (e) {
-      _logs = [];
-    }
-    setState(() => _isLoading = false);
-  }
-
-  @override
   Widget build(BuildContext context) {
+    final businessId = ref.watch(activeBusinessProvider)?.id ?? '';
+    final logsAsync = ref.watch(auditLogsProvider({
+      'businessId': businessId,
+      'entityType': _selectedEntityType,
+    }));
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Audit Logs'),
@@ -59,7 +30,6 @@ class _AuditLogsPageState extends ConsumerState<AuditLogsPage> {
           PopupMenuButton<String>(
             onSelected: (value) {
               setState(() => _selectedEntityType = value == 'all' ? null : value);
-              _loadLogs();
             },
             itemBuilder: (context) => [
               PopupMenuItem(value: 'all', child: Text('All', style: TextStyle(fontWeight: _selectedEntityType == null ? FontWeight.bold : FontWeight.normal))),
@@ -72,33 +42,41 @@ class _AuditLogsPageState extends ConsumerState<AuditLogsPage> {
           ),
         ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _logs.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.history, size: 64, color: Colors.grey.withAlpha(100)),
-                      const SizedBox(height: 16),
-                      const Text('No audit logs found'),
-                    ],
-                  ),
-                )
-              : RefreshIndicator(
-                  onRefresh: _loadLogs,
-                  child: ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: _logs.length,
-                    itemBuilder: (context, index) => _buildLogCard(_logs[index]),
-                  ),
-                ),
+      body: logsAsync.when(
+        data: (logs) {
+          if (logs.isEmpty) {
+            return Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.history, size: 64, color: Colors.grey.withAlpha(100)),
+                  const SizedBox(height: 16),
+                  const Text('No audit logs found'),
+                ],
+              ),
+            );
+          }
+          return RefreshIndicator(
+            onRefresh: () async => ref.invalidate(auditLogsProvider({
+              'businessId': businessId,
+              'entityType': _selectedEntityType,
+            })),
+            child: ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: logs.length,
+              itemBuilder: (context, index) => _buildLogCard(logs[index]),
+            ),
+          );
+        },
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => Center(child: Text('Error: $e')),
+      ),
     );
   }
 
-  Widget _buildLogCard(Map<String, dynamic> log) {
-    final action = log['action'] as String;
-    final entityType = log['entityType'] as String;
+  Widget _buildLogCard(dynamic log) {
+    final action = log.action;
+    final entityType = log.entityType;
 
     IconData icon;
     Color color;
@@ -134,7 +112,7 @@ class _AuditLogsPageState extends ConsumerState<AuditLogsPage> {
         ),
         title: Text('${action[0].toUpperCase()}${action.substring(1)} ${entityType[0].toUpperCase()}${entityType.substring(1)}'),
         subtitle: Text(
-          '${log['entityId']} · ${Helpers.formatDateTime(log['createdAt'] as DateTime)}',
+          '${log.entityId} · ${Helpers.formatDateTime(log.createdAt)}',
         ),
         trailing: const Icon(Icons.chevron_right, size: 18),
         onTap: () => _showLogDetails(log),
@@ -142,7 +120,7 @@ class _AuditLogsPageState extends ConsumerState<AuditLogsPage> {
     );
   }
 
-  void _showLogDetails(Map<String, dynamic> log) {
+  void _showLogDetails(dynamic log) {
     showModalBottomSheet(
       context: context,
       builder: (context) => Padding(
@@ -153,17 +131,17 @@ class _AuditLogsPageState extends ConsumerState<AuditLogsPage> {
           children: [
             Text('Audit Log Details', style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 16),
-            _buildDetailRow('Action', (log['action'] as String).toUpperCase()),
-            _buildDetailRow('Entity Type', (log['entityType'] as String).toUpperCase()),
-            _buildDetailRow('Entity ID', log['entityId'] as String),
-            _buildDetailRow('Date', Helpers.formatDateTime(log['createdAt'] as DateTime)),
+            _buildDetailRow('Action', log.action.toUpperCase()),
+            _buildDetailRow('Entity Type', log.entityType.toUpperCase()),
+            _buildDetailRow('Entity ID', log.entityId),
+            _buildDetailRow('Date', Helpers.formatDateTime(log.createdAt)),
             const Divider(),
             Text('Changes:', style: Theme.of(context).textTheme.titleSmall),
             const SizedBox(height: 8),
             Expanded(
               child: SingleChildScrollView(
                 child: Text(
-                  log['changes'] as String? ?? 'No changes recorded',
+                  log.changes ?? 'No changes recorded',
                   style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
                 ),
               ),

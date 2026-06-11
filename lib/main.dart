@@ -5,6 +5,7 @@ import 'package:invoice_pro/core/di/providers.dart';
 import 'package:invoice_pro/core/router/app_router.dart';
 import 'package:invoice_pro/services/security_service.dart';
 import 'package:invoice_pro/themes/app_theme.dart';
+import 'package:invoice_pro/presentation/widgets/app_lock_wrapper.dart';
 
 final themeModeProvider = StateProvider<ThemeMode>((ref) => ThemeMode.system);
 
@@ -20,7 +21,7 @@ void main() async {
   final savedTheme = await securityService.getThemeMode();
   container.read(themeModeProvider.notifier).state = AppTheme.getThemeMode(savedTheme);
 
-  runApp(UncontrolledProviderScope(container: container, child: const InvoiceProApp()));
+  runApp(UncontrolledProviderScope(container: container, child: const AppLockWrapper(child: InvoiceProApp())));
 }
 
 class InvoiceProApp extends ConsumerWidget {
@@ -29,6 +30,7 @@ class InvoiceProApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final themeMode = ref.watch(themeModeProvider);
+    final router = ref.watch(routerProvider);
 
     return MaterialApp.router(
       title: 'Invoice Pro',
@@ -36,7 +38,7 @@ class InvoiceProApp extends ConsumerWidget {
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: themeMode,
-      routerConfig: appRouter,
+      routerConfig: router,
     );
   }
 }

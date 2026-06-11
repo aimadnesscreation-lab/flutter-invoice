@@ -32,16 +32,10 @@ class _CreditNotesPageState extends ConsumerState<CreditNotesPage> {
   }
 
   Widget _buildBody(String businessId) {
-    return FutureBuilder<List<CreditNote>>(
-      future: ref.read(creditNoteRepositoryProvider).getAllCreditNotes(businessId),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        if (snapshot.hasError) {
-          return Center(child: Text('Error: ${snapshot.error}'));
-        }
-        final notes = snapshot.data ?? [];
+    final creditNotesAsync = ref.watch(creditNotesProvider(businessId));
+
+    return creditNotesAsync.when(
+      data: (notes) {
         if (notes.isEmpty) {
           return Center(
             child: Column(
@@ -54,12 +48,17 @@ class _CreditNotesPageState extends ConsumerState<CreditNotesPage> {
             ),
           );
         }
-        return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: notes.length,
-          itemBuilder: (context, index) => _buildCreditNoteCard(context, notes[index]),
+        return RefreshIndicator(
+          onRefresh: () async => ref.invalidate(creditNotesProvider(businessId)),
+          child: ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: notes.length,
+            itemBuilder: (context, index) => _buildCreditNoteCard(context, notes[index]),
+          ),
         );
       },
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => Center(child: Text('Error: $e')),
     );
   }
 
@@ -132,7 +131,7 @@ class _CreditNotesPageState extends ConsumerState<CreditNotesPage> {
                 maxLines: 3,
               ),
               const SizedBox(height: 16),
-              SizedBox(
+                SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: () async {
@@ -140,11 +139,14 @@ class _CreditNotesPageState extends ConsumerState<CreditNotesPage> {
                     if (amount == null || amount <= 0) return;
 
                     final repo = ref.read(creditNoteRepositoryProvider);
-                    final cn = await repo.generateCreditNoteNumber(businessId, 'CN-');
+                    final business = ref.read(activeBusinessProvider);
+                    final prefix = business?.creditNotePrefix ?? 'CN-';
+                    final cnNum = await repo.generateCreditNoteNumber(businessId, prefix);
+                    
                     await repo.createCreditNote(CreditNote(
                       id: const Uuid().v4(),
                       businessId: businessId,
-                      creditNoteNumber: cn,
+                      creditNoteNumber: cnNum,
                       reason: selectedReason,
                       amount: amount,
                       creditNoteDate: DateTime.now(),
@@ -152,7 +154,8 @@ class _CreditNotesPageState extends ConsumerState<CreditNotesPage> {
                       createdAt: DateTime.now(),
                       updatedAt: DateTime.now(),
                     ));
-                    setState(() {});
+                    
+                    ref.invalidate(creditNotesProvider(businessId));
                     if (context.mounted) Navigator.pop(context);
                   },
                   child: const Text('Create Credit Note'),

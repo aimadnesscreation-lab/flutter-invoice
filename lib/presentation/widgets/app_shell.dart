@@ -76,71 +76,97 @@ class AppShell extends ConsumerWidget {
   void _showMoreMenu(BuildContext context) {
     showModalBottomSheet(
       context: context,
-      builder: (context) => Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _MoreMenuItem(
-            icon: Icons.request_quote_outlined,
-            title: 'Estimates',
-            onTap: () { context.pop(); context.go('/estimates'); },
-          ),
-          _MoreMenuItem(
-            icon: Icons.payments_outlined,
-            title: 'Payments',
-            onTap: () { context.pop(); context.go('/payments'); },
-          ),
-          _MoreMenuItem(
-            icon: Icons.money_off_outlined,
-            title: 'Expenses',
-            onTap: () { context.pop(); context.go('/expenses'); },
-          ),
-          _MoreMenuItem(
-            icon: Icons.store_outlined,
-            title: 'Suppliers',
-            onTap: () { context.pop(); context.go('/suppliers'); },
-          ),
-          _MoreMenuItem(
-            icon: Icons.request_quote_outlined,
-            title: 'Credit Notes',
-            onTap: () { context.pop(); context.go('/credit-notes'); },
-          ),
-          _MoreMenuItem(
-            icon: Icons.bar_chart_outlined,
-            title: 'Reports',
-            onTap: () { context.pop(); context.go('/reports'); },
-          ),
-          _MoreMenuItem(
-            icon: Icons.search_outlined,
-            title: 'Search',
-            onTap: () { context.pop(); context.go('/search'); },
-          ),
-          _MoreMenuItem(
-            icon: Icons.settings_outlined,
-            title: 'Settings',
-            onTap: () { context.pop(); context.go('/settings'); },
-          ),
-          _MoreMenuItem(
-            icon: Icons.shopping_cart_outlined,
-            title: 'Purchase Orders',
-            onTap: () { context.pop(); context.go('/purchase-orders'); },
-          ),
-          _MoreMenuItem(
-            icon: Icons.backup_outlined,
-            title: 'Backup & Restore',
-            onTap: () { context.pop(); context.go('/backup'); },
-          ),
-          _MoreMenuItem(
-            icon: Icons.history_outlined,
-            title: 'Audit Logs',
-            onTap: () { context.pop(); context.go('/audit-logs'); },
-          ),
-          _MoreMenuItem(
-            icon: Icons.delete_sweep_outlined,
-            title: 'Recycle Bin',
-            onTap: () { context.pop(); context.go('/recycle-bin'); },
-          ),
-          const SizedBox(height: 16),
-        ],
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.6,
+        minChildSize: 0.4,
+        maxChildSize: 0.9,
+        expand: false,
+        builder: (context, scrollController) => Column(
+          children: [
+            const SizedBox(height: 8),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Expanded(
+              child: ListView(
+                controller: scrollController,
+                children: [
+                  _MoreMenuItem(
+                    icon: Icons.request_quote_outlined,
+                    title: 'Estimates',
+                    onTap: () { context.pop(); context.go('/estimates'); },
+                  ),
+                  _MoreMenuItem(
+                    icon: Icons.payments_outlined,
+                    title: 'Payments',
+                    onTap: () { context.pop(); context.go('/payments'); },
+                  ),
+                  _MoreMenuItem(
+                    icon: Icons.money_off_outlined,
+                    title: 'Expenses',
+                    onTap: () { context.pop(); context.go('/expenses'); },
+                  ),
+                  _MoreMenuItem(
+                    icon: Icons.store_outlined,
+                    title: 'Suppliers',
+                    onTap: () { context.pop(); context.go('/suppliers'); },
+                  ),
+                  _MoreMenuItem(
+                    icon: Icons.request_quote_outlined,
+                    title: 'Credit Notes',
+                    onTap: () { context.pop(); context.go('/credit-notes'); },
+                  ),
+                  _MoreMenuItem(
+                    icon: Icons.shopping_cart_outlined,
+                    title: 'Purchase Orders',
+                    onTap: () { context.pop(); context.go('/purchase-orders'); },
+                  ),
+                  _MoreMenuItem(
+                    icon: Icons.bar_chart_outlined,
+                    title: 'Reports',
+                    onTap: () { context.pop(); context.go('/reports'); },
+                  ),
+                  _MoreMenuItem(
+                    icon: Icons.search_outlined,
+                    title: 'Search',
+                    onTap: () { context.pop(); context.go('/search'); },
+                  ),
+                  _MoreMenuItem(
+                    icon: Icons.backup_outlined,
+                    title: 'Backup & Restore',
+                    onTap: () { context.pop(); context.go('/backup'); },
+                  ),
+                  _MoreMenuItem(
+                    icon: Icons.history_outlined,
+                    title: 'Audit Logs',
+                    onTap: () { context.pop(); context.go('/audit-logs'); },
+                  ),
+                  _MoreMenuItem(
+                    icon: Icons.delete_sweep_outlined,
+                    title: 'Recycle Bin',
+                    onTap: () { context.pop(); context.go('/recycle-bin'); },
+                  ),
+                  _MoreMenuItem(
+                    icon: Icons.settings_outlined,
+                    title: 'Settings',
+                    onTap: () { context.pop(); context.go('/settings'); },
+                  ),
+                  const SizedBox(height: 16),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

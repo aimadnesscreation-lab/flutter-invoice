@@ -29,15 +29,52 @@ import 'package:invoice_pro/presentation/pages/audit_logs/audit_logs_page.dart';
 import 'package:invoice_pro/presentation/pages/purchase_orders/purchase_orders_page.dart';
 import 'package:invoice_pro/presentation/pages/settings/recurring_invoices_page.dart';
 import 'package:invoice_pro/presentation/widgets/app_shell.dart';
+import 'package:invoice_pro/presentation/pages/auth/pin_lock_screen.dart';
 
-final GlobalKey<NavigatorState> _rootNavigatorKey = GlobalKey<NavigatorState>();
+import 'dart:async';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-final appRouter = GoRouter(
-  navigatorKey: _rootNavigatorKey,
-  initialLocation: '/',
-  routes: [
-    ShellRoute(
-      builder: (context, state, child) => AppShell(child: child),
+final routerProvider = Provider<GoRouter>((ref) {
+  final authState = ref.watch(authProvider);
+
+  return GoRouter(
+    navigatorKey: _rootNavigatorKey,
+    initialLocation: '/',
+    refreshListenable: RouterRefreshNotifier(ref),
+    redirect: (context, state) {
+      final isLocked = authState.isLocked && !authState.isAuthenticated;
+      final goingToLock = state.uri.path == '/lock';
+
+      if (isLocked && !goingToLock) return '/lock';
+      if (!isLocked && goingToLock) return '/';
+      
+      return null;
+    },
+    routes: [
+      GoRoute(
+        path: '/lock',
+        name: 'lock',
+        builder: (context, state) => const PinLockScreen(),
+      ),
+      ShellRoute(
+        builder: (context, state, child) => AppShell(child: child),
+...
+});
+
+class RouterRefreshNotifier extends ChangeNotifier {
+  RouterRefreshNotifier(Ref ref) {
+    _subscription = ref.listen(authProvider, (_, __) => notifyListeners());
+  }
+
+  late final ProviderSubscription _subscription;
+
+  @override
+  void dispose() {
+    _subscription.close();
+    super.dispose();
+  }
+}
+
       routes: [
         GoRoute(
           path: '/',
@@ -205,6 +242,21 @@ final appRouter = GoRouter(
           path: '/purchase-orders',
           name: 'purchaseOrders',
           builder: (context, state) => const PurchaseOrdersPage(),
+          routes: [
+            GoRoute(
+              path: 'create',
+              name: 'purchaseOrderCreate',
+              builder: (context, state) => const InvoiceFormPage(isPurchaseOrder: true),
+            ),
+            GoRoute(
+              path: ':id/edit',
+              name: 'purchaseOrderEdit',
+              builder: (context, state) => InvoiceFormPage(
+                invoiceId: state.pathParameters['id'],
+                isPurchaseOrder: true,
+              ),
+            ),
+          ],
         ),
         GoRoute(
           path: '/recurring-invoices',

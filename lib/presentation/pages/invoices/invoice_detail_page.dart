@@ -121,11 +121,11 @@ class InvoiceDetailPage extends ConsumerWidget {
                         if (context.mounted) context.pop();
                       }
                     case 'mark_sent':
-                      await _updateStatus(ref, invoice, 'sent');
+                      await _updateStatus(ref, context, invoice, 'sent');
                     case 'mark_paid':
-                      await _updateStatus(ref, invoice, 'paid');
+                      await _updateStatus(ref, context, invoice, 'paid');
                     case 'mark_cancelled':
-                      await _updateStatus(ref, invoice, 'cancelled');
+                      await _updateStatus(ref, context, invoice, 'cancelled');
                   }
                 },
                 itemBuilder: (context) => [
@@ -215,7 +215,7 @@ class InvoiceDetailPage extends ConsumerWidget {
                           if (canMarkSent)
                             Expanded(
                               child: OutlinedButton.icon(
-                                onPressed: () => _updateStatus(ref, invoice, 'sent'),
+                                onPressed: () => _updateStatus(ref, context, invoice, 'sent'),
                                 icon: const Icon(Icons.send, size: 18),
                                 label: const Text('Mark Sent'),
                               ),
@@ -224,7 +224,7 @@ class InvoiceDetailPage extends ConsumerWidget {
                           if (canMarkPaid)
                             Expanded(
                               child: ElevatedButton.icon(
-                                onPressed: () => _updateStatus(ref, invoice, 'paid'),
+                                onPressed: () => _updateStatus(ref, context, invoice, 'paid'),
                                 icon: const Icon(Icons.check_circle, size: 18),
                                 label: const Text('Mark Paid'),
                                 style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
@@ -332,23 +332,41 @@ class InvoiceDetailPage extends ConsumerWidget {
     );
   }
 
-  Future<void> _updateStatus(WidgetRef ref, invoice, String newStatus) async {
-    final repo = ref.read(invoiceRepositoryProvider);
-    final businessId = ref.read(activeBusinessProvider)?.id ?? 'default';
-    if (newStatus == 'paid') {
-      await repo.updateInvoice(invoice.copyWith(
-        status: newStatus,
-        paidAmount: invoice.grandTotal,
-        balanceDue: 0,
-        updatedAt: DateTime.now(),
-      ), invoice.items);
-    } else {
-      await repo.updateInvoice(invoice.copyWith(
-        status: newStatus,
-        updatedAt: DateTime.now(),
-      ), invoice.items);
+  Future<void> _updateStatus(WidgetRef ref, BuildContext context, Invoice invoice, String newStatus) async {
+    try {
+      final repo = ref.read(invoiceRepositoryProvider);
+      final businessId = ref.read(activeBusinessProvider)?.id ?? 'default';
+      
+      Invoice updatedInvoice;
+      if (newStatus == 'paid') {
+        updatedInvoice = invoice.copyWith(
+          status: newStatus,
+          paidAmount: invoice.grandTotal,
+          balanceDue: 0,
+          updatedAt: DateTime.now(),
+        );
+      } else {
+        updatedInvoice = invoice.copyWith(
+          status: newStatus,
+          updatedAt: DateTime.now(),
+        );
+      }
+
+      await repo.updateInvoice(updatedInvoice, invoice.items);
+      ref.invalidate(invoicesProvider(businessId));
+      
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Invoice marked as $newStatus')),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error updating status: $e'), backgroundColor: Colors.red),
+        );
+      }
     }
-    ref.invalidate(invoicesProvider(businessId));
   }
 
   Widget _buildInfoRow(String label, String value) {

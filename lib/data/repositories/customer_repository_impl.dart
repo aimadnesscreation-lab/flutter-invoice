@@ -69,6 +69,9 @@ class CustomerRepositoryImpl implements CustomerRepository {
       createdAt: model.createdAt.millisecondsSinceEpoch,
       updatedAt: model.updatedAt.millisecondsSinceEpoch,
     ));
+
+    await _logAudit(customer.businessId, 'customer', id, 'create', 'Created customer ${customer.name}');
+    
     return model.toEntity();
   }
 
@@ -99,15 +102,23 @@ class CustomerRepositoryImpl implements CustomerRepository {
         updatedAt: Value(updated.updatedAt.millisecondsSinceEpoch),
         deletedAt: Value(updated.deletedAt?.millisecondsSinceEpoch),
       ));
+
+    await _logAudit(customer.businessId, 'customer', customer.id, 'update', 'Updated customer ${customer.name}');
+
     return updated.toEntity();
   }
 
   @override
   Future<void> deleteCustomer(String id) async {
+    final customer = await getCustomerById(id);
     await (_db.customers.update()
       ..where((t) => t.id.equals(id))).write(CustomersCompanion(
         deletedAt: Value(DateTime.now().millisecondsSinceEpoch),
       ));
+
+    if (customer != null) {
+      await _logAudit(customer.businessId, 'customer', id, 'delete', 'Deleted customer ${customer.name}');
+    }
   }
 
   @override
@@ -140,16 +151,40 @@ class CustomerRepositoryImpl implements CustomerRepository {
 
   @override
   Future<List<domain.Customer>> getTopCustomers(String businessId, {int limit = 10}) async {
-    final rows = await (_db.customers.select()
-      ..where((t) => t.businessId.equals(businessId))
-      ..where((t) => t.deletedAt.isNull())
-      ..limit(limit)).get();
-    return rows.map((r) => CustomerModel.fromMap(_rowToMap(r)).toEntity()).toList();
+    // Join with invoices to find customers with highest revenue
+    final revenue = _db.invoices.grandTotal.sum();
+    final query = _db.select(_db.customers).join([
+      innerJoin(_db.invoices, _db.invoices.customerId.equalsExp(_db.customers.id)),
+    ])
+      ..where(_db.customers.businessId.equals(businessId))
+      ..where(_db.customers.deletedAt.isNull())
+      ..where(_db.invoices.status.equals('paid'))
+      ..addColumns([revenue])
+      ..groupBy([_db.customers.id])
+      ..orderBy([OrderingTerm.desc(revenue)])
+      ..limit(limit);
+
+    final rows = await query.get();
+    return rows.map((row) => CustomerModel.fromMap(_rowToMap(row.readTable(_db.customers))).toEntity()).toList();
   }
 
   @override
   Future<List<domain.Customer>> getOutstandingCustomers(String businessId, {int limit = 10}) async {
-    return getTopCustomers(businessId, limit: limit);
+    // Join with invoices to find customers with highest balance due
+    final balance = _db.invoices.balanceDue.sum();
+    final query = _db.select(_db.customers).join([
+      innerJoin(_db.invoices, _db.invoices.customerId.equalsExp(_db.customers.id)),
+    ])
+      ..where(_db.customers.businessId.equals(businessId))
+      ..where(_db.customers.deletedAt.isNull())
+      ..where(_db.invoices.balanceDue.isBiggerThanValue(0))
+      ..addColumns([balance])
+      ..groupBy([_db.customers.id])
+      ..orderBy([OrderingTerm.desc(balance)])
+      ..limit(limit);
+
+    final rows = await query.get();
+    return rows.map((row) => CustomerModel.fromMap(_rowToMap(row.readTable(_db.customers))).toEntity()).toList();
   }
 
   Map<String, dynamic> _rowToMap(Customer row) {
@@ -166,5 +201,17 @@ class CustomerRepositoryImpl implements CustomerRepository {
       'updated_at': row.updatedAt,
       'deleted_at': row.deletedAt,
     };
+  }
+
+  Future<void> _logAudit(String businessId, String entityType, String entityId, String action, String changes) async {
+    await _db.into(_db.auditLogs).insert(AuditLogsCompanion.insert(
+      id: const Uuid().v4(),
+      businessId: businessId,
+      entityType: entityType,
+      entityId: entityId,
+      action: action,
+      changes: changes,
+      createdAt: DateTime.now().millisecondsSinceEpoch,
+    ));
   }
 }

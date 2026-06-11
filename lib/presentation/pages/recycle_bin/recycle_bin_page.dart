@@ -13,79 +13,61 @@ class RecycleBinPage extends ConsumerStatefulWidget {
 }
 
 class _RecycleBinPageState extends ConsumerState<RecycleBinPage> {
-  List<Map<String, dynamic>> _deletedItems = [];
-  bool _isLoading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadDeletedItems();
-  }
-
-  Future<void> _loadDeletedItems() async {
-    setState(() => _isLoading = true);
-    try {
-      final db = sl<AppDatabase>();
-      final rows = await (db.select(db.deletedItems)
-        ..orderBy([(t) => OrderingTerm(expression: t.deletedAt, mode: OrderingMode.desc)])
-        ..limit(50)).get();
-
-      _deletedItems = rows.map((r) => {
-        'id': r.id,
-        'entityType': r.entityType,
-        'entityId': r.entityId,
-        'entityData': r.entityData,
-        'deletedAt': DateTime.fromMillisecondsSinceEpoch(r.deletedAt),
-        'expiresAt': DateTime.fromMillisecondsSinceEpoch(r.expiresAt),
-      }).toList();
-    } catch (e) {
-      _deletedItems = [];
-    }
-    setState(() => _isLoading = false);
-  }
-
   @override
   Widget build(BuildContext context) {
+    final businessId = ref.watch(activeBusinessProvider)?.id ?? '';
+    final trashAsync = ref.watch(trashProvider(businessId));
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Recycle Bin'),
         actions: [
-          if (!_isLoading && _deletedItems.isNotEmpty)
-            IconButton(
-              icon: const Icon(Icons.delete_sweep),
-              onPressed: _emptyTrash,
-              tooltip: 'Empty Trash',
-            ),
+          trashAsync.when(
+            data: (items) => items.isNotEmpty
+                ? IconButton(
+                    icon: const Icon(Icons.delete_sweep),
+                    onPressed: () => _emptyTrash(businessId),
+                    tooltip: 'Empty Trash',
+                  )
+                : const SizedBox(),
+            loading: () => const SizedBox(),
+            error: (_, __) => const SizedBox(),
+          ),
         ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _deletedItems.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.delete_sweep_outlined, size: 64, color: Colors.grey.withAlpha(100)),
-                      const SizedBox(height: 16),
-                      const Text('Recycle bin is empty'),
-                    ],
-                  ),
-                )
-              : RefreshIndicator(
-                  onRefresh: _loadDeletedItems,
-                  child: ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: _deletedItems.length,
-                    itemBuilder: (context, index) => _buildDeletedItemCard(_deletedItems[index]),
-                  ),
-                ),
+      body: trashAsync.when(
+        data: (items) {
+          if (items.isEmpty) {
+            return Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.delete_sweep_outlined, size: 64, color: Colors.grey.withAlpha(100)),
+                  const SizedBox(height: 16),
+                  const Text('Recycle bin is empty'),
+                ],
+              ),
+            );
+          }
+          return RefreshIndicator(
+            onRefresh: () async => ref.invalidate(trashProvider(businessId)),
+            child: ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: items.length,
+              itemBuilder: (context, index) => _buildDeletedItemCard(items[index], businessId),
+            ),
+          );
+        },
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => Center(child: Text('Error: $e')),
+      ),
     );
   }
 
-  Widget _buildDeletedItemCard(Map<String, dynamic> item) {
-    final entityType = item['entityType'] as String;
-    final deletedAt = item['deletedAt'] as DateTime;
-    final expiresAt = item['expiresAt'] as DateTime;
+  Widget _buildDeletedItemCard(Map<String, dynamic> item, String businessId) {
+    final entityType = item['entity_type'] as String;
+    final deletedAt = DateTime.fromMillisecondsSinceEpoch(item['deleted_at'] as int);
+    final expiresAt = DateTime.fromMillisecondsSinceEpoch(item['expires_at'] as int);
     final daysLeft = expiresAt.difference(DateTime.now()).inDays;
 
     IconData icon;
@@ -113,52 +95,41 @@ class _RecycleBinPageState extends ConsumerState<RecycleBinPage> {
         trailing: IconButton(
           icon: const Icon(Icons.restore, color: Colors.green),
           tooltip: 'Restore',
-          onPressed: () => _restoreItem(item),
+          onPressed: () => _restoreItem(item, businessId),
         ),
       ),
     );
   }
 
-  Future<void> _restoreItem(Map<String, dynamic> item) async {
+  Future<void> _restoreItem(Map<String, dynamic> item, String businessId) async {
     try {
-      final db = sl<AppDatabase>();
-      final entityType = item['entityType'] as String;
-      final entityId = item['entityId'] as String;
-      await db.transaction(() async {
-        // Restore by setting deletedAt to null
-        switch (entityType) {
-          case 'customer':
-            await (db.update(db.customers)..where((t) => t.id.equals(entityId))).write(
-              CustomersCompanion(deletedAt: Value(null)),
-            );
-            break;
-          case 'product':
-            await (db.update(db.products)..where((t) => t.id.equals(entityId))).write(
-              ProductsCompanion(deletedAt: Value(null)),
-            );
-            break;
-          case 'invoice':
-            await (db.update(db.invoices)..where((t) => t.id.equals(entityId))).write(
-              InvoicesCompanion(deletedAt: Value(null)),
-            );
-            break;
-          case 'expense':
-            await (db.update(db.expenses)..where((t) => t.id.equals(entityId))).write(
-              ExpensesCompanion(deletedAt: Value(null)),
-            );
-            break;
-        }
+      final entityType = item['entity_type'] as String;
+      final entityId = item['entity_id'] as String;
+      final trashRepo = ref.read(trashRepositoryProvider);
+      
+      // Perform restoration logic based on entity type
+      // Since repositories already have restore methods, we should use them
+      switch (entityType) {
+        case 'customer':
+          await ref.read(customerRepositoryProvider).restoreCustomer(entityId);
+          break;
+        case 'product':
+          await ref.read(productRepositoryProvider).restoreProduct(entityId);
+          break;
+        case 'invoice':
+          await ref.read(invoiceRepositoryProvider).restoreInvoice(entityId);
+          break;
+        // Add other cases as needed
+      }
 
-        // Remove from deleted_items
-        await (db.delete(db.deletedItems)..where((t) => t.id.equals(item['id'] as String))).go();
-      });
+      await trashRepo.restoreFromTrash(item['id'] as String);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('${entityType[0].toUpperCase()}${entityType.substring(1)} restored')),
         );
       }
-      _loadDeletedItems();
+      ref.invalidate(trashProvider(businessId));
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -168,7 +139,7 @@ class _RecycleBinPageState extends ConsumerState<RecycleBinPage> {
     }
   }
 
-  Future<void> _emptyTrash() async {
+  Future<void> _emptyTrash(String businessId) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -183,9 +154,8 @@ class _RecycleBinPageState extends ConsumerState<RecycleBinPage> {
 
     if (confirmed == true) {
       try {
-        final db = sl<AppDatabase>();
-        await (db.delete(db.deletedItems)).go();
-        _loadDeletedItems();
+        await ref.read(trashRepositoryProvider).emptyTrash(businessId);
+        ref.invalidate(trashProvider(businessId));
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Recycle bin emptied')),

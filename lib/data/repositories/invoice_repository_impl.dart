@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:drift/drift.dart';
 import 'package:uuid/uuid.dart';
 import 'package:invoice_pro/database/app_database.dart';
@@ -157,7 +158,13 @@ class InvoiceRepositoryImpl implements InvoiceRepository {
           taxAmount: Value(item.taxAmount),
           subtotal: Value(item.subtotal),
         ));
+
+        if (item.productId != null && invoice.status != 'draft') {
+          await _updateInventory(invoice.businessId, item.productId!, -item.quantity, 'invoice', id);
+        }
       }
+
+      await _logAudit(invoice.businessId, 'invoice', id, 'create', jsonEncode(items.map((i) => i.description).toList()));
 
       final created = await getInvoiceById(id);
       return created!;
@@ -169,6 +176,8 @@ class InvoiceRepositoryImpl implements InvoiceRepository {
     final now = DateTime.now();
     
     return await _db.transaction(() async {
+      final oldInvoice = await getInvoiceById(invoice.id);
+      
       await (_db.invoices.update()..where((t) => t.id.equals(invoice.id))).write(InvoicesCompanion(
         customerId: Value(invoice.customerId),
         invoiceNumber: Value(invoice.invoiceNumber),
@@ -198,6 +207,15 @@ class InvoiceRepositoryImpl implements InvoiceRepository {
         updatedAt: Value(now.millisecondsSinceEpoch),
       ));
 
+      // Reverse old inventory impact
+      if (oldInvoice != null && oldInvoice.status != 'draft') {
+        for (final item in oldInvoice.items) {
+          if (item.productId != null) {
+            await _updateInventory(invoice.businessId, item.productId!, item.quantity, 'invoice_update_reverse', invoice.id);
+          }
+        }
+      }
+
       await (_db.invoiceItems.delete()..where((t) => t.invoiceId.equals(invoice.id))).go();
       
       for (final item in items) {
@@ -214,7 +232,13 @@ class InvoiceRepositoryImpl implements InvoiceRepository {
           taxAmount: Value(item.taxAmount),
           subtotal: Value(item.subtotal),
         ));
+
+        if (item.productId != null && invoice.status != 'draft') {
+          await _updateInventory(invoice.businessId, item.productId!, -item.quantity, 'invoice', invoice.id);
+        }
       }
+
+      await _logAudit(invoice.businessId, 'invoice', invoice.id, 'update', 'Updated invoice items');
 
       final updated = await getInvoiceById(invoice.id);
       return updated!;
@@ -223,10 +247,9 @@ class InvoiceRepositoryImpl implements InvoiceRepository {
 
   @override
   Future<void> deleteInvoice(String id) async {
-    await _db.transaction(() async {
-      await (_db.invoiceItems.delete()..where((t) => t.invoiceId.equals(id))).go();
-      await (_db.invoices.delete()..where((t) => t.id.equals(id))).go();
-    });
+    await (_db.invoices.update()..where((t) => t.id.equals(id))).write(
+      InvoicesCompanion(deletedAt: Value(DateTime.now().millisecondsSinceEpoch))
+    );
   }
 
   @override
@@ -374,7 +397,49 @@ class InvoiceRepositoryImpl implements InvoiceRepository {
 
   @override
   Future<void> generateRecurringInvoices() async {
-    // Implementation for generating recurring invoices based on recurringNextDate
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final recurringInvoices = await (_db.invoices.select()
+      ..where((t) => t.isRecurring.equals(true))
+      ..where((t) => t.deletedAt.isNull())
+      ..where((t) => (t.recurringNextDate.isSmallerOrEqualValue(now)) & t.recurringNextDate.isNotNull())).get();
+
+    for (final inv in recurringInvoices) {
+      final items = await _getInvoiceItems(inv.id);
+      final business = await (_db.businesses.select()..where((t) => t.id.equals(inv.businessId))).getSingle();
+      final nextInvoiceNumber = await generateInvoiceNumber(inv.businessId, business.invoicePrefix);
+      
+      final nextDate = DateTime.fromMillisecondsSinceEpoch(inv.recurringNextDate!);
+      DateTime? newNextDate;
+      switch (inv.recurringInterval) {
+        case 'Daily': newNextDate = nextDate.add(const Duration(days: 1)); break;
+        case 'Weekly': newNextDate = nextDate.add(const Duration(days: 7)); break;
+        case 'Biweekly': newNextDate = nextDate.add(const Duration(days: 14)); break;
+        case 'Monthly': newNextDate = DateTime(nextDate.year, nextDate.month + 1, nextDate.day); break;
+        case 'Quarterly': newNextDate = DateTime(nextDate.year, nextDate.month + 3, nextDate.day); break;
+        case 'Yearly': newNextDate = DateTime(nextDate.year + 1, nextDate.month, nextDate.day); break;
+      }
+
+      if (inv.recurringEndDate != null && newNextDate != null && newNextDate.millisecondsSinceEpoch > inv.recurringEndDate!) {
+        newNextDate = null;
+      }
+
+      await createInvoice(
+        InvoiceModel.fromMap(_rowToMap(inv)).toEntity().copyWith(
+          id: const Uuid().v4(),
+          invoiceNumber: nextInvoiceNumber,
+          invoiceDate: nextDate,
+          dueDate: nextDate.add(const Duration(days: 30)),
+          status: 'draft',
+          isRecurring: false, 
+        ),
+        items.map((i) => i.copyWith(id: const Uuid().v4())).toList(),
+      );
+
+      await (_db.invoices.update()..where((t) => t.id.equals(inv.id))).write(InvoicesCompanion(
+        recurringNextDate: Value(newNextDate?.millisecondsSinceEpoch),
+        updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
+      ));
+    }
   }
 
   @override
@@ -505,5 +570,40 @@ class InvoiceRepositoryImpl implements InvoiceRepository {
       'tax_amount': row.taxAmount,
       'subtotal': row.subtotal,
     };
+  }
+
+  Future<void> _updateInventory(String businessId, String productId, double quantityChange, String refType, String refId) async {
+    final product = await (_db.products.select()..where((t) => t.id.equals(productId))).getSingleOrNull();
+    if (product == null) return;
+
+    final newQuantity = product.quantity + quantityChange;
+    await (_db.products.update()..where((t) => t.id.equals(productId))).write(ProductsCompanion(
+      quantity: Value(newQuantity),
+      updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
+    ));
+
+    await _db.into(_db.inventoryTransactions).insert(InventoryTransactionsCompanion.insert(
+      id: const Uuid().v4(),
+      businessId: businessId,
+      productId: productId,
+      type: quantityChange > 0 ? 'stock_in' : 'stock_out',
+      quantity: quantityChange.abs(),
+      reason: Value('Invoice Transaction: $refType'),
+      referenceType: Value(refType),
+      referenceId: Value(refId),
+      createdAt: DateTime.now().millisecondsSinceEpoch,
+    ));
+  }
+
+  Future<void> _logAudit(String businessId, String entityType, String entityId, String action, String changes) async {
+    await _db.into(_db.auditLogs).insert(AuditLogsCompanion.insert(
+      id: const Uuid().v4(),
+      businessId: businessId,
+      entityType: entityType,
+      entityId: entityId,
+      action: action,
+      changes: changes,
+      createdAt: DateTime.now().millisecondsSinceEpoch,
+    ));
   }
 }

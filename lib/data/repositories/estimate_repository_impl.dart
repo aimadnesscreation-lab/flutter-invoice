@@ -122,6 +122,8 @@ class EstimateRepositoryImpl implements EstimateRepository {
         ));
       }
 
+      await _logAudit(estimate.businessId, 'estimate', id, 'create', 'Created estimate ${estimate.estimateNumber}');
+
       final created = await getEstimateById(id);
       return created!;
     });
@@ -172,6 +174,8 @@ class EstimateRepositoryImpl implements EstimateRepository {
         ));
       }
 
+      await _logAudit(estimate.businessId, 'estimate', estimate.id, 'update', 'Updated estimate ${estimate.estimateNumber}');
+
       final updated = await getEstimateById(estimate.id);
       return updated!;
     });
@@ -179,10 +183,15 @@ class EstimateRepositoryImpl implements EstimateRepository {
 
   @override
   Future<void> deleteEstimate(String id) async {
+    final estimate = await getEstimateById(id);
     await (_db.estimates.update()
       ..where((t) => t.id.equals(id))).write(EstimatesCompanion(
         deletedAt: Value(DateTime.now().millisecondsSinceEpoch),
       ));
+    
+    if (estimate != null) {
+      await _logAudit(estimate.businessId, 'estimate', id, 'delete', 'Deleted estimate ${estimate.estimateNumber}');
+    }
   }
 
   @override
@@ -223,13 +232,39 @@ class EstimateRepositoryImpl implements EstimateRepository {
     final invoiceId = const Uuid().v4();
     final now = DateTime.now();
 
-    await _db.transaction(() async {
+    return await _db.transaction(() async {
+      final business = await (_db.businesses.select()..where((t) => t.id.equals(estimate.businessId))).getSingle();
+      
+      // Generate proper invoice number
+      final query = _db.select(_db.invoiceNumbering)
+        ..where((t) => t.businessId.equals(estimate.businessId))
+        ..where((t) => t.type.equals('invoice'))
+        ..where((t) => t.prefix.equals(business.invoicePrefix));
+      
+      final existing = await query.getSingleOrNull();
+      int nextNumber = 1;
+      if (existing != null) {
+        nextNumber = existing.lastNumber + 1;
+        await (_db.invoiceNumbering.update()..where((t) => t.id.equals(existing.id))).write(
+          InvoiceNumberingCompanion(lastNumber: Value(nextNumber))
+        );
+      } else {
+        await _db.into(_db.invoiceNumbering).insert(InvoiceNumberingCompanion.insert(
+          id: const Uuid().v4(),
+          businessId: estimate.businessId,
+          prefix: business.invoicePrefix,
+          type: 'invoice',
+          lastNumber: Value(nextNumber),
+        ));
+      }
+      final invoiceNumber = '${business.invoicePrefix}${nextNumber.toString().padLeft(6, '0')}';
+
       // Create invoice
       await _db.into(_db.invoices).insert(InvoicesCompanion.insert(
         id: invoiceId,
         businessId: estimate.businessId,
         customerId: Value(estimate.customerId),
-        invoiceNumber: 'INV-${estimate.estimateNumber.replaceAll(RegExp(r'[^0-9]'), '')}',
+        invoiceNumber: invoiceNumber,
         status: const Value('draft'),
         invoiceDate: now.millisecondsSinceEpoch,
         dueDate: now.add(const Duration(days: 30)).millisecondsSinceEpoch,
@@ -271,9 +306,23 @@ class EstimateRepositoryImpl implements EstimateRepository {
           convertedInvoiceId: Value(invoiceId),
           updatedAt: Value(now.millisecondsSinceEpoch),
         ));
+      
+      await _logAudit(estimate.businessId, 'estimate', estimateId, 'convert', 'Converted estimate to invoice $invoiceNumber');
+      
+      return invoiceId;
     });
+  }
 
-    return invoiceId;
+  Future<void> _logAudit(String businessId, String entityType, String entityId, String action, String changes) async {
+    await _db.into(_db.auditLogs).insert(AuditLogsCompanion.insert(
+      id: const Uuid().v4(),
+      businessId: businessId,
+      entityType: entityType,
+      entityId: entityId,
+      action: action,
+      changes: changes,
+      createdAt: DateTime.now().millisecondsSinceEpoch,
+    ));
   }
 
   Future<List<domain.EstimateItem>> _getEstimateItems(String estimateId) async {

@@ -9,8 +9,9 @@ import 'package:invoice_pro/domain/entities/product.dart';
 
 class InvoiceFormPage extends ConsumerStatefulWidget {
   final String? invoiceId;
+  final bool isPurchaseOrder;
 
-  const InvoiceFormPage({super.key, this.invoiceId});
+  const InvoiceFormPage({super.key, this.invoiceId, this.isPurchaseOrder = false});
 
   @override
   ConsumerState<InvoiceFormPage> createState() => _InvoiceFormPageState();
@@ -23,6 +24,8 @@ class _InvoiceFormPageState extends ConsumerState<InvoiceFormPage> {
 
   String? _selectedCustomerId;
   String? _selectedCustomerName;
+  String? _selectedSupplierId;
+  String? _selectedSupplierName;
   DateTime _invoiceDate = DateTime.now();
   DateTime _dueDate = DateTime.now().add(const Duration(days: 30));
   double _discountPercent = 0;
@@ -47,6 +50,8 @@ class _InvoiceFormPageState extends ConsumerState<InvoiceFormPage> {
         setState(() {
           _selectedCustomerId = invoice.customerId;
           _selectedCustomerName = invoice.customerName;
+          _selectedSupplierId = invoice.supplierId;
+          _selectedSupplierName = invoice.supplierName;
           _invoiceDate = invoice.invoiceDate;
           _dueDate = invoice.dueDate;
           _items.clear();
@@ -77,15 +82,20 @@ class _InvoiceFormPageState extends ConsumerState<InvoiceFormPage> {
     final business = ref.watch(activeBusinessProvider);
     final businessId = business?.id ?? 'default';
     final customersAsync = ref.watch(customersProvider(businessId));
+    final suppliersAsync = ref.watch(suppliersProvider(businessId));
     final productsAsync = ref.watch(productsProvider(businessId));
 
     if (_isLoading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
+    final title = widget.isPurchaseOrder 
+      ? (isEditing ? 'Edit Purchase Order' : 'Create Purchase Order')
+      : (isEditing ? 'Edit Invoice' : 'Create Invoice');
+
     return Scaffold(
       appBar: AppBar(
-        title: Text(isEditing ? 'Edit Invoice' : 'Create Invoice'),
+        title: Text(title),
         actions: [
           TextButton(
             onPressed: _isFormValid ? _saveInvoice : null,
@@ -100,23 +110,41 @@ class _InvoiceFormPageState extends ConsumerState<InvoiceFormPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Customer Select
-              customersAsync.when(
-                data: (customers) => DropdownButtonFormField<String>(
-                  initialValue: _selectedCustomerId,
-                  decoration: const InputDecoration(labelText: 'Customer *', prefixIcon: Icon(Icons.person)),
-                  items: customers.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))).toList(),
-                  onChanged: (id) {
-                    setState(() {
-                      _selectedCustomerId = id;
-                      _selectedCustomerName = customers.where((c) => c.id == id).firstOrNull?.name;
-                    });
-                  },
-                  validator: (v) => Validators.required('Customer', v),
+              // Customer or Supplier Select
+              if (widget.isPurchaseOrder)
+                suppliersAsync.when(
+                  data: (suppliers) => DropdownButtonFormField<String>(
+                    initialValue: _selectedSupplierId,
+                    decoration: const InputDecoration(labelText: 'Supplier *', prefixIcon: Icon(Icons.store)),
+                    items: suppliers.map((s) => DropdownMenuItem(value: s.id, child: Text(s.name))).toList(),
+                    onChanged: (id) {
+                      setState(() {
+                        _selectedSupplierId = id;
+                        _selectedSupplierName = suppliers.where((s) => s.id == id).firstOrNull?.name;
+                      });
+                    },
+                    validator: (v) => Validators.required('Supplier', v),
+                  ),
+                  loading: () => const LinearProgressIndicator(),
+                  error: (e, _) => Text('Error: $e'),
+                )
+              else
+                customersAsync.when(
+                  data: (customers) => DropdownButtonFormField<String>(
+                    initialValue: _selectedCustomerId,
+                    decoration: const InputDecoration(labelText: 'Customer *', prefixIcon: Icon(Icons.person)),
+                    items: customers.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))).toList(),
+                    onChanged: (id) {
+                      setState(() {
+                        _selectedCustomerId = id;
+                        _selectedCustomerName = customers.where((c) => c.id == id).firstOrNull?.name;
+                      });
+                    },
+                    validator: (v) => Validators.required('Customer', v),
+                  ),
+                  loading: () => const LinearProgressIndicator(),
+                  error: (e, _) => Text('Error: $e'),
                 ),
-                loading: () => const LinearProgressIndicator(),
-                error: (e, _) => Text('Error: $e'),
-              ),
 
               const SizedBox(height: 16),
 
@@ -403,7 +431,7 @@ class _InvoiceFormPageState extends ConsumerState<InvoiceFormPage> {
     }
   }
 
-  bool get _isFormValid => _selectedCustomerId != null && _items.isNotEmpty;
+  bool get _isFormValid => (widget.isPurchaseOrder ? _selectedSupplierId != null : _selectedCustomerId != null) && _items.isNotEmpty;
 
   void _saveInvoice() async {
     if (!_formKey.currentState!.validate()) return;
@@ -418,12 +446,16 @@ class _InvoiceFormPageState extends ConsumerState<InvoiceFormPage> {
       String invoiceNumber;
       DateTime createdAt = DateTime.now();
       
+      final prefix = widget.isPurchaseOrder 
+        ? (business?.purchaseOrderPrefix ?? 'PO-')
+        : (business?.invoicePrefix ?? 'INV-');
+
       if (isEditing) {
         final existing = await repo.getInvoiceById(widget.invoiceId!);
-        invoiceNumber = existing?.invoiceNumber ?? await repo.generateInvoiceNumber(businessId, 'INV-');
+        invoiceNumber = existing?.invoiceNumber ?? await repo.generateInvoiceNumber(businessId, prefix);
         createdAt = existing?.createdAt ?? DateTime.now();
       } else {
-        invoiceNumber = await repo.generateInvoiceNumber(businessId, 'INV-');
+        invoiceNumber = await repo.generateInvoiceNumber(businessId, prefix);
       }
 
       final invoice = Invoice(
@@ -431,7 +463,10 @@ class _InvoiceFormPageState extends ConsumerState<InvoiceFormPage> {
         businessId: businessId,
         customerId: _selectedCustomerId,
         customerName: _selectedCustomerName,
+        supplierId: _selectedSupplierId,
+        supplierName: _selectedSupplierName,
         invoiceNumber: invoiceNumber,
+        status: 'draft',
         invoiceDate: _invoiceDate,
         dueDate: _dueDate,
         subtotal: _subtotal,
@@ -441,6 +476,7 @@ class _InvoiceFormPageState extends ConsumerState<InvoiceFormPage> {
         taxAmount: _taxAmount,
         grandTotal: _grandTotal,
         balanceDue: _grandTotal,
+        isPurchaseOrder: widget.isPurchaseOrder,
         notes: _noteController.text.trim().isEmpty ? null : _noteController.text.trim(),
         createdAt: createdAt,
         updatedAt: DateTime.now(),
@@ -457,7 +493,7 @@ class _InvoiceFormPageState extends ConsumerState<InvoiceFormPage> {
       Navigator.of(context).pop();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error saving invoice: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error saving document: $e')));
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);

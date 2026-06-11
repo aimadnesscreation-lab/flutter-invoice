@@ -8,6 +8,8 @@ import 'package:invoice_pro/domain/entities/payment.dart';
 import 'package:invoice_pro/domain/entities/expense.dart';
 import 'package:invoice_pro/domain/entities/estimate.dart';
 import 'package:invoice_pro/domain/entities/supplier.dart';
+import 'package:invoice_pro/domain/repositories/audit_log_repository.dart';
+import 'package:invoice_pro/domain/repositories/trash_repository.dart';
 import 'package:invoice_pro/domain/repositories/business_repository.dart';
 import 'package:invoice_pro/domain/repositories/customer_repository.dart';
 import 'package:invoice_pro/domain/repositories/product_repository.dart';
@@ -35,6 +37,8 @@ final taxRateRepositoryProvider = Provider<TaxRateRepository>((ref) => sl());
 final currencyRepositoryProvider = Provider<CurrencyRepository>((ref) => sl());
 final creditNoteRepositoryProvider = Provider<CreditNoteRepository>((ref) => sl());
 final settingsRepositoryProvider = Provider<SettingsRepository>((ref) => sl());
+final auditLogRepositoryProvider = Provider<AuditLogRepository>((ref) => sl());
+final trashRepositoryProvider = Provider<TrashRepository>((ref) => sl());
 
 // Service providers
 final securityServiceProvider = Provider<SecurityService>((ref) => sl());
@@ -115,6 +119,25 @@ final estimatesProvider = FutureProvider.family<List<Estimate>, String>((ref, bu
 // Supplier providers
 final suppliersProvider = FutureProvider.family<List<Supplier>, String>((ref, businessId) async {
   return ref.watch(supplierRepositoryProvider).getAllSuppliers(businessId);
+});
+
+// Credit Note providers
+final creditNotesProvider = FutureProvider.family<List<CreditNote>, String>((ref, businessId) async {
+  return ref.watch(creditNoteRepositoryProvider).getAllCreditNotes(businessId);
+});
+
+// Audit Log providers
+final auditLogsProvider = FutureProvider.family<List<AuditLog>, Map<String, dynamic>>((ref, params) async {
+  return ref.watch(auditLogRepositoryProvider).getLogs(
+    params['businessId'] as String,
+    entityType: params['entityType'] as String?,
+    entityId: params['entityId'] as String?,
+  );
+});
+
+// Trash providers
+final trashProvider = FutureProvider.family<List<Map<String, dynamic>>, String>((ref, businessId) async {
+  return ref.watch(trashRepositoryProvider).getTrashItems(businessId);
 });
 
 // Dashboard stats provider

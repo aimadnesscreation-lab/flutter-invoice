@@ -91,6 +91,9 @@ class ProductRepositoryImpl implements ProductRepository {
       createdAt: model.createdAt.millisecondsSinceEpoch,
       updatedAt: model.updatedAt.millisecondsSinceEpoch,
     ));
+
+    await _logAudit(product.businessId, 'product', id, 'create', 'Created product ${product.name}');
+
     return model.toEntity();
   }
 
@@ -130,15 +133,23 @@ class ProductRepositoryImpl implements ProductRepository {
         updatedAt: Value(updated.updatedAt.millisecondsSinceEpoch),
         deletedAt: Value(updated.deletedAt?.millisecondsSinceEpoch),
       ));
+
+    await _logAudit(product.businessId, 'product', product.id, 'update', 'Updated product ${product.name}');
+
     return updated.toEntity();
   }
 
   @override
   Future<void> deleteProduct(String id) async {
+    final product = await getProductById(id);
     await (_db.products.update()
       ..where((t) => t.id.equals(id))).write(ProductsCompanion(
         deletedAt: Value(DateTime.now().millisecondsSinceEpoch),
       ));
+
+    if (product != null) {
+      await _logAudit(product.businessId, 'product', id, 'delete', 'Deleted product ${product.name}');
+    }
   }
 
   @override
@@ -183,7 +194,7 @@ class ProductRepositoryImpl implements ProductRepository {
       ..where(_db.products.deletedAt.isNull());
     
     final row = await query.getSingle();
-    return row.read(valuationExp) ?? 0.0;
+    return (row.read(valuationExp) as num?)?.toDouble() ?? 0.0;
   }
 
   Map<String, dynamic> _rowToMap(Product row) {
@@ -204,5 +215,17 @@ class ProductRepositoryImpl implements ProductRepository {
       'updated_at': row.updatedAt,
       'deleted_at': row.deletedAt,
     };
+  }
+
+  Future<void> _logAudit(String businessId, String entityType, String entityId, String action, String changes) async {
+    await _db.into(_db.auditLogs).insert(AuditLogsCompanion.insert(
+      id: const Uuid().v4(),
+      businessId: businessId,
+      entityType: entityType,
+      entityId: entityId,
+      action: action,
+      changes: changes,
+      createdAt: DateTime.now().millisecondsSinceEpoch,
+    ));
   }
 }

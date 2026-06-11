@@ -39,16 +39,17 @@ class PdfService {
 
   Future<void> saveInvoicePdf(Invoice invoice, Business business) async {
     final pdfBytes = await generateInvoicePdf(invoice, business);
-    final dir = await getApplicationDocumentsDirectory();
-    final file = File('${dir.path}/invoice_${invoice.invoiceNumber}.pdf');
-    await file.writeAsBytes(pdfBytes);
+    await Printing.sharePdf(
+      bytes: pdfBytes,
+      filename: 'invoice_${invoice.invoiceNumber}.pdf',
+    );
   }
 
   Future<void> printInvoice(Invoice invoice, Business business) async {
     final pdfBytes = await generateInvoicePdf(invoice, business);
-    await Printing.sharePdf(
-      bytes: pdfBytes,
-      filename: 'invoice_${invoice.invoiceNumber}.pdf',
+    await Printing.layoutPdf(
+      onLayout: (PdfPageFormat format) async => pdfBytes,
+      name: 'invoice_${invoice.invoiceNumber}.pdf',
     );
   }
 

@@ -12,6 +12,10 @@ import 'package:invoice_pro/data/repositories/supplier_repository_impl.dart';
 import 'package:invoice_pro/data/repositories/tax_rate_repository_impl.dart';
 import 'package:invoice_pro/data/repositories/currency_repository_impl.dart';
 import 'package:invoice_pro/data/repositories/settings_repository_impl.dart';
+import 'package:invoice_pro/data/repositories/trash_repository_impl.dart';
+import 'package:invoice_pro/data/repositories/audit_log_repository_impl.dart';
+import 'package:invoice_pro/domain/repositories/trash_repository.dart';
+import 'package:invoice_pro/domain/repositories/audit_log_repository.dart';
 import 'package:invoice_pro/domain/repositories/business_repository.dart';
 import 'package:invoice_pro/domain/repositories/customer_repository.dart';
 import 'package:invoice_pro/domain/repositories/product_repository.dart';
@@ -56,4 +60,6 @@ Future<void> initDependencies() async {
   sl.registerLazySingleton<TaxRateRepository>(() => TaxRateRepositoryImpl(sl<AppDatabase>()));
   sl.registerLazySingleton<CurrencyRepository>(() => CurrencyRepositoryImpl(sl<AppDatabase>()));
   sl.registerLazySingleton<SettingsRepository>(() => SettingsRepositoryImpl(sl<AppDatabase>()));
+  sl.registerLazySingleton<AuditLogRepository>(() => AuditLogRepositoryImpl(sl<AppDatabase>()));
+  sl.registerLazySingleton<TrashRepository>(() => TrashRepositoryImpl(sl<AppDatabase>()));
 }
