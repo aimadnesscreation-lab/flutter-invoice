@@ -19,6 +19,7 @@ import 'package:invoice_pro/presentation/pages/settings/business_settings_page.d
 import 'package:invoice_pro/presentation/pages/settings/security_settings_page.dart';
 import 'package:invoice_pro/presentation/pages/settings/tax_rates_page.dart';
 import 'package:invoice_pro/presentation/pages/settings/currencies_page.dart';
+import 'package:invoice_pro/presentation/pages/settings/invoice_settings_page.dart';
 import 'package:invoice_pro/presentation/pages/search/search_page.dart';
 import 'package:invoice_pro/presentation/pages/backup/backup_page.dart';
 import 'package:invoice_pro/presentation/pages/credit_notes/credit_notes_page.dart';
@@ -162,6 +163,11 @@ final appRouter = GoRouter(
               path: 'currencies',
               name: 'settingsCurrencies',
               builder: (context, state) => const CurrenciesPage(),
+            ),
+            GoRoute(
+              path: 'invoices',
+              name: 'settingsInvoices',
+              builder: (context, state) => const InvoiceSettingsPage(),
             ),
           ],
         ),

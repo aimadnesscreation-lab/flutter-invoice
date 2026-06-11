@@ -43,7 +43,7 @@ class SettingsPage extends StatelessWidget {
             icon: Icons.receipt_long,
             title: 'Invoice Settings',
             subtitle: 'Set numbering, defaults and templates',
-            onTap: () => context.go('/settings/business'),
+            onTap: () => context.go('/settings/invoices'),
           ),
           _buildSettingTile(
             context,
