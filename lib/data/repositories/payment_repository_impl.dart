@@ -106,6 +106,9 @@ class PaymentRepositoryImpl implements PaymentRepository {
         }
       }
 
+      await _logAudit(payment.businessId, 'payment', id, 'create',
+          '${payment.isRefund ? "Refund" : "Payment"} ${payment.paymentNumber}: ${payment.amount} via ${payment.method}');
+
       final created = await getPaymentById(id);
       return created!;
     });
@@ -143,8 +146,12 @@ class PaymentRepositoryImpl implements PaymentRepository {
 
   @override
   Future<void> deletePayment(String id) async {
+    final payment = await getPaymentById(id);
     await (_db.payments.delete()
       ..where((t) => t.id.equals(id))).go();
+    if (payment != null) {
+      await _logAudit(payment.businessId, 'payment', id, 'delete', 'Deleted payment ${payment.paymentNumber}');
+    }
   }
 
   @override
@@ -213,5 +220,17 @@ class PaymentRepositoryImpl implements PaymentRepository {
       'payment_date': row.paymentDate,
       'created_at': row.createdAt,
     };
+  }
+
+  Future<void> _logAudit(String businessId, String entityType, String entityId, String action, String changes) async {
+    await _db.into(_db.auditLogs).insert(AuditLogsCompanion.insert(
+      id: const Uuid().v4(),
+      businessId: businessId,
+      entityType: entityType,
+      entityId: entityId,
+      action: action,
+      changes: changes,
+      createdAt: DateTime.now().millisecondsSinceEpoch,
+    ));
   }
 }

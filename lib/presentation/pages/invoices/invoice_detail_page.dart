@@ -7,6 +7,7 @@ import 'package:invoice_pro/core/utils/helpers.dart';
 import 'package:invoice_pro/presentation/widgets/status_badge.dart';
 import 'package:invoice_pro/services/pdf_service.dart';
 import 'package:invoice_pro/domain/entities/invoice.dart';
+import 'package:invoice_pro/domain/entities/payment.dart';
 import 'package:uuid/uuid.dart';
 
 class InvoiceDetailPage extends ConsumerWidget {
@@ -266,7 +267,9 @@ class InvoiceDetailPage extends ConsumerWidget {
                 // Line Items
                 Text('Items', style: Theme.of(context).textTheme.titleMedium),
                 const SizedBox(height: 8),
-                ...invoice.items.map((item) => Card(
+                ...invoice.items.map((item) {
+                final itemTotal = item.subtotal + item.taxAmount;
+                return Card(
                   child: Padding(
                     padding: const EdgeInsets.all(12),
                     child: Row(
@@ -281,11 +284,12 @@ class InvoiceDetailPage extends ConsumerWidget {
                             ],
                           ),
                         ),
-                        Text(Helpers.formatCurrency(item.subtotal), style: const TextStyle(fontWeight: FontWeight.bold)),
+                        Text(Helpers.formatCurrency(itemTotal), style: const TextStyle(fontWeight: FontWeight.bold)),
                       ],
                     ),
                   ),
-                )),
+                );
+              }),
 
                 const SizedBox(height: 16),
 
@@ -335,27 +339,40 @@ class InvoiceDetailPage extends ConsumerWidget {
 
   Future<void> _updateStatus(WidgetRef ref, BuildContext context, Invoice invoice, String newStatus) async {
     try {
-      final repo = ref.read(invoiceRepositoryProvider);
-      final businessId = ref.read(activeBusinessProvider)?.id ?? 'default';
-      
-      Invoice updatedInvoice;
+      final invoiceRepo = ref.read(invoiceRepositoryProvider);
+      final paymentRepo = ref.read(paymentRepositoryProvider);
+      final business = ref.read(activeBusinessProvider);
+      final businessId = business?.id ?? 'default';
+
       if (newStatus == 'paid') {
-        updatedInvoice = invoice.copyWith(
-          status: newStatus,
-          paidAmount: invoice.grandTotal,
-          balanceDue: 0,
-          updatedAt: DateTime.now(),
-        );
+        // Create a Payment record so the collection trail is preserved
+        final paymentNumber = await paymentRepo.generatePaymentNumber(businessId, 'PAY-');
+        await paymentRepo.createPayment(Payment(
+          id: const Uuid().v4(),
+          businessId: businessId,
+          invoiceId: invoice.id,
+          invoiceNumber: invoice.invoiceNumber,
+          customerId: invoice.customerId,
+          customerName: invoice.customerName,
+          paymentNumber: paymentNumber,
+          amount: invoice.balanceDue,
+          method: 'manual',
+          isRefund: false,
+          paymentDate: DateTime.now(),
+          createdAt: DateTime.now(),
+        ));
+        // The payment repo already updates paidAmount and balanceDue on the invoice
       } else {
-        updatedInvoice = invoice.copyWith(
+        final updatedInvoice = invoice.copyWith(
           status: newStatus,
           updatedAt: DateTime.now(),
         );
+        await invoiceRepo.updateInvoice(updatedInvoice, invoice.items);
       }
 
-      await repo.updateInvoice(updatedInvoice, invoice.items);
       ref.invalidate(invoicesProvider(businessId));
-      
+      ref.invalidate(paymentsProvider(businessId));
+
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Invoice marked as $newStatus')),

@@ -73,28 +73,55 @@ class CreditNoteRepositoryImpl implements CreditNoteRepository {
     final id = const Uuid().v4();
     final now = DateTime.now();
     
-    await _db.into(_db.creditNotes).insert(CreditNotesCompanion.insert(
-      id: id,
-      businessId: creditNote.businessId,
-      invoiceId: Value(creditNote.invoiceId),
-      customerId: Value(creditNote.customerId),
-      creditNoteNumber: creditNote.creditNoteNumber,
-      reason: creditNote.reason,
-      amount: creditNote.amount,
-      creditNoteDate: creditNote.creditNoteDate.millisecondsSinceEpoch,
-      notes: Value(creditNote.notes),
-      createdAt: now.millisecondsSinceEpoch,
-      updatedAt: now.millisecondsSinceEpoch,
-    ));
-    
-    final created = await getCreditNoteById(id);
-    return created!;
+    return await _db.transaction(() async {
+      await _db.into(_db.creditNotes).insert(CreditNotesCompanion.insert(
+        id: id,
+        businessId: creditNote.businessId,
+        invoiceId: Value(creditNote.invoiceId),
+        customerId: Value(creditNote.customerId),
+        creditNoteNumber: creditNote.creditNoteNumber,
+        reason: creditNote.reason,
+        amount: creditNote.amount,
+        creditNoteDate: creditNote.creditNoteDate.millisecondsSinceEpoch,
+        notes: Value(creditNote.notes),
+        createdAt: now.millisecondsSinceEpoch,
+        updatedAt: now.millisecondsSinceEpoch,
+      ));
+
+      // If linked to an invoice, apply the credit note to reduce the balance due
+      if (creditNote.invoiceId != null) {
+        final invoiceRow = await (_db.invoices.select()
+          ..where((t) => t.id.equals(creditNote.invoiceId!))).getSingleOrNull();
+        if (invoiceRow != null) {
+          final newBalance = invoiceRow.balanceDue - creditNote.amount;
+          final adjustedBalance = newBalance > 0 ? newBalance : 0.0;
+          final newStatus = adjustedBalance <= 0
+              ? 'paid'
+              : (invoiceRow.paidAmount > 0 ? 'partial' : 'sent');
+          await (_db.invoices.update()
+            ..where((t) => t.id.equals(creditNote.invoiceId!))).write(InvoicesCompanion(
+              balanceDue: Value(adjustedBalance),
+              status: Value(newStatus),
+            ));
+        }
+      }
+
+      await _logAudit(creditNote.businessId, 'credit_note', id, 'create',
+          'Credit note ${creditNote.creditNoteNumber}: ${creditNote.amount} (${creditNote.reason})');
+
+      final created = await getCreditNoteById(id);
+      return created!;
+    });
   }
 
   @override
   Future<void> deleteCreditNote(String id) async {
+    final note = await getCreditNoteById(id);
     await (_db.creditNotes.delete()
       ..where((t) => t.id.equals(id))).go();
+    if (note != null) {
+      await _logAudit(note.businessId, 'credit_note', id, 'delete', 'Deleted credit note ${note.creditNoteNumber}');
+    }
   }
 
   @override
@@ -143,5 +170,17 @@ class CreditNoteRepositoryImpl implements CreditNoteRepository {
       'created_at': row.createdAt,
       'updated_at': row.updatedAt,
     };
+  }
+
+  Future<void> _logAudit(String businessId, String entityType, String entityId, String action, String changes) async {
+    await _db.into(_db.auditLogs).insert(AuditLogsCompanion.insert(
+      id: const Uuid().v4(),
+      businessId: businessId,
+      entityType: entityType,
+      entityId: entityId,
+      action: action,
+      changes: changes,
+      createdAt: DateTime.now().millisecondsSinceEpoch,
+    ));
   }
 }

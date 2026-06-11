@@ -5,6 +5,7 @@ import 'package:invoice_pro/core/di/providers.dart';
 import 'package:invoice_pro/core/utils/helpers.dart';
 import 'package:invoice_pro/core/utils/validators.dart';
 import 'package:invoice_pro/domain/entities/payment.dart';
+import 'package:invoice_pro/domain/entities/invoice.dart';
 import 'package:invoice_pro/presentation/widgets/shimmer_loading.dart';
 
 class PaymentsPage extends ConsumerStatefulWidget {
@@ -72,7 +73,7 @@ class _PaymentsPageState extends ConsumerState<PaymentsPage> {
         ),
         title: Text('${payment.paymentNumber} · ${payment.method.replaceAll('_', ' ').toUpperCase()}'),
         subtitle: Text(
-          '${payment.customerName ?? "N/A"} · ${Helpers.formatDate(payment.paymentDate)}${payment.isRefund ? " · REFUND" : ""}',
+          '${payment.invoiceNumber ?? payment.customerName ?? "N/A"} · ${Helpers.formatDate(payment.paymentDate)}${payment.isRefund ? " · REFUND" : ""}',
         ),
         trailing: Text(
           Helpers.formatCurrency(payment.amount),
@@ -89,9 +90,16 @@ class _PaymentsPageState extends ConsumerState<PaymentsPage> {
     final formKey = GlobalKey<FormState>();
     final amountController = TextEditingController();
     String selectedMethod = 'cash';
+    String? selectedInvoiceId;
+    String? selectedInvoiceNumber;
+    String? selectedCustomerId;
+    String? selectedCustomerName;
     final refController = TextEditingController();
     final notesController = TextEditingController();
     bool isRefund = false;
+
+    final business = ref.read(activeBusinessProvider);
+    final businessId = business?.id ?? '';
 
     showModalBottomSheet(
       context: context,
@@ -109,6 +117,40 @@ class _PaymentsPageState extends ConsumerState<PaymentsPage> {
               children: [
                 Text('Record Payment', style: Theme.of(context).textTheme.titleLarge),
                 const SizedBox(height: 16),
+                // Invoice selector — only show invoices with balance due > 0
+                FutureBuilder<List<Invoice>>(
+                  future: ref.read(invoiceRepositoryProvider).getAllInvoices(businessId),
+                  builder: (context, snapshot) {
+                    final invoices = snapshot.data ?? [];
+                    return DropdownButtonFormField<String?>(
+                      value: selectedInvoiceId,
+                      decoration: const InputDecoration(
+                        labelText: 'Invoice (optional)',
+                        prefixIcon: Icon(Icons.receipt),
+                      ),
+                      items: [
+                        const DropdownMenuItem(value: null, child: Text('None (standalone payment)')),
+                        ...invoices.where((inv) => inv.balanceDue > 0).map((inv) => DropdownMenuItem(
+                          value: inv.id,
+                          child: Text('${inv.invoiceNumber} (${Helpers.formatCurrency(inv.balanceDue)})'),
+                        )),
+                      ],
+                      onChanged: (id) {
+                        setDialogState(() {
+                          selectedInvoiceId = id;
+                          final inv = invoices.where((i) => i.id == id).firstOrNull;
+                          selectedInvoiceNumber = inv?.invoiceNumber;
+                          selectedCustomerId = inv?.customerId;
+                          selectedCustomerName = inv?.customerName;
+                          if (inv != null && amountController.text.isEmpty) {
+                            amountController.text = inv.balanceDue.toStringAsFixed(2);
+                          }
+                        });
+                      },
+                    );
+                  },
+                ),
+                const SizedBox(height: 12),
                 TextFormField(
                   controller: amountController,
                   decoration: const InputDecoration(labelText: 'Amount *', prefixIcon: Icon(Icons.money)),
@@ -154,36 +196,39 @@ class _PaymentsPageState extends ConsumerState<PaymentsPage> {
                       if (!formKey.currentState!.validate()) return;
                       final amount = double.parse(amountController.text.trim());
 
-                    final business = ref.read(activeBusinessProvider);
-                    final businessId = business?.id ?? '';
-                    if (businessId.isEmpty) return;
+                      if (businessId.isEmpty) return;
 
-                    final repo = ref.read(paymentRepositoryProvider);
-                    final paymentNumber = await repo.generatePaymentNumber(businessId, 'PAY-');
-                    await repo.createPayment(Payment(
-                      id: const Uuid().v4(),
-                      businessId: businessId,
-                      paymentNumber: paymentNumber,
-                      amount: amount,
-                      method: selectedMethod,
-                      reference: refController.text.trim().isEmpty ? null : refController.text.trim(),
-                      notes: notesController.text.trim().isEmpty ? null : notesController.text.trim(),
-                      isRefund: isRefund,
-                      paymentDate: DateTime.now(),
-                      createdAt: DateTime.now(),
-                    ));
+                      final repo = ref.read(paymentRepositoryProvider);
+                      final paymentNumber = await repo.generatePaymentNumber(businessId, 'PAY-');
+                      await repo.createPayment(Payment(
+                        id: const Uuid().v4(),
+                        businessId: businessId,
+                        invoiceId: selectedInvoiceId,
+                        invoiceNumber: selectedInvoiceNumber,
+                        customerId: selectedCustomerId,
+                        customerName: selectedCustomerName,
+                        paymentNumber: paymentNumber,
+                        amount: amount,
+                        method: selectedMethod,
+                        reference: refController.text.trim().isEmpty ? null : refController.text.trim(),
+                        notes: notesController.text.trim().isEmpty ? null : notesController.text.trim(),
+                        isRefund: isRefund,
+                        paymentDate: DateTime.now(),
+                        createdAt: DateTime.now(),
+                      ));
 
-                    ref.invalidate(paymentsProvider(businessId));
-                    if (context.mounted) Navigator.pop(context);
-                  },
-                  child: const Text('Record Payment'),
+                      ref.invalidate(paymentsProvider(businessId));
+                      ref.invalidate(invoicesProvider(businessId));
+                      if (context.mounted) Navigator.pop(context);
+                    },
+                    child: const Text('Record Payment'),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
-    ),
     );
   }
 }

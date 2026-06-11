@@ -4,6 +4,7 @@ import 'package:uuid/uuid.dart';
 import 'package:invoice_pro/core/di/providers.dart';
 import 'package:invoice_pro/core/utils/helpers.dart';
 import 'package:invoice_pro/domain/entities/credit_note.dart';
+import 'package:invoice_pro/domain/entities/invoice.dart';
 
 class CreditNotesPage extends ConsumerStatefulWidget {
   const CreditNotesPage({super.key});
@@ -93,6 +94,10 @@ class _CreditNotesPageState extends ConsumerState<CreditNotesPage> {
     final amountController = TextEditingController();
     final notesController = TextEditingController();
     String selectedReason = 'return';
+    String? selectedInvoiceId;
+    String? selectedInvoiceNumber;
+    String? selectedCustomerId;
+    String? selectedCustomerName;
 
     showModalBottomSheet(
       context: context,
@@ -108,6 +113,34 @@ class _CreditNotesPageState extends ConsumerState<CreditNotesPage> {
             children: [
               Text('Create Credit Note', style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 16),
+              // Invoice selector
+              FutureBuilder<List<Invoice>>(
+                future: ref.read(invoiceRepositoryProvider).getAllInvoices(businessId),
+                builder: (context, snapshot) {
+                  final invoices = snapshot.data ?? [];
+                  return DropdownButtonFormField<String?>(
+                    initialValue: selectedInvoiceId,
+                    decoration: const InputDecoration(labelText: 'Invoice (optional)', prefixIcon: Icon(Icons.receipt)),
+                    items: [
+                      const DropdownMenuItem(value: null, child: Text('None (standalone)')),
+                      ...invoices.where((inv) => inv.balanceDue > 0).map((inv) => DropdownMenuItem(
+                        value: inv.id,
+                        child: Text('${inv.invoiceNumber} (${Helpers.formatCurrency(inv.balanceDue)})'),
+                      )),
+                    ],
+                    onChanged: (id) {
+                      setDialogState(() {
+                        selectedInvoiceId = id;
+                        final inv = invoices.where((i) => i.id == id).firstOrNull;
+                        selectedInvoiceNumber = inv?.invoiceNumber;
+                        selectedCustomerId = inv?.customerId;
+                        selectedCustomerName = inv?.customerName;
+                      });
+                    },
+                  );
+                },
+              ),
+              const SizedBox(height: 12),
               TextField(
                 controller: amountController,
                 decoration: const InputDecoration(labelText: 'Amount *', prefixIcon: Icon(Icons.money)),
@@ -146,6 +179,10 @@ class _CreditNotesPageState extends ConsumerState<CreditNotesPage> {
                     await repo.createCreditNote(CreditNote(
                       id: const Uuid().v4(),
                       businessId: businessId,
+                      invoiceId: selectedInvoiceId,
+                      invoiceNumber: selectedInvoiceNumber,
+                      customerId: selectedCustomerId,
+                      customerName: selectedCustomerName,
                       creditNoteNumber: cnNum,
                       reason: selectedReason,
                       amount: amount,
@@ -156,6 +193,7 @@ class _CreditNotesPageState extends ConsumerState<CreditNotesPage> {
                     ));
                     
                     ref.invalidate(creditNotesProvider(businessId));
+                    ref.invalidate(invoicesProvider(businessId));
                     if (context.mounted) Navigator.pop(context);
                   },
                   child: const Text('Create Credit Note'),

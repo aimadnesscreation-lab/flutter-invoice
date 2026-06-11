@@ -72,10 +72,15 @@ class _InvoiceFormPageState extends ConsumerState<InvoiceFormPage> {
     super.dispose();
   }
 
-  double get _subtotal => _items.fold(0.0, (sum, item) => sum + item.subtotal);
-  double get _discountAmount => _subtotal * (_discountPercent / 100);
-  double get _taxAmount => (_subtotal - _discountAmount) * (_taxPercent / 100);
-  double get _grandTotal => _subtotal - _discountAmount + _taxAmount;
+  // Item subtotals (net after item-level discount, before item-level tax)
+  double get _itemSubtotals => _items.fold(0.0, (sum, item) => sum + item.subtotal);
+  // Sum of all item-level taxes
+  double get _itemTaxes => _items.fold(0.0, (sum, item) => sum + item.taxAmount);
+  // Invoice-level discount applied to item subtotals
+  double get _discountAmount => _itemSubtotals * (_discountPercent / 100);
+  // Invoice-level tax (applied after discount) + all item-level taxes
+  double get _taxAmount => (_itemSubtotals - _discountAmount) * (_taxPercent / 100) + _itemTaxes;
+  double get _grandTotal => _itemSubtotals - _discountAmount + _taxAmount;
 
   @override
   Widget build(BuildContext context) {
@@ -255,7 +260,7 @@ class _InvoiceFormPageState extends ConsumerState<InvoiceFormPage> {
                   padding: const EdgeInsets.all(16),
                   child: Column(
                     children: [
-                      _buildTotalRow('Subtotal', Helpers.formatCurrency(_subtotal)),
+                      _buildTotalRow('Subtotal', Helpers.formatCurrency(_itemSubtotals)),
                       if (_discountPercent > 0) _buildTotalRow('Discount ($_discountPercent%)', '-${Helpers.formatCurrency(_discountAmount)}'),
                       _buildTotalRow('Tax ($_taxPercent%)', Helpers.formatCurrency(_taxAmount)),
                       const Divider(),
@@ -386,7 +391,8 @@ class _InvoiceFormPageState extends ConsumerState<InvoiceFormPage> {
                 final discP = double.tryParse(discController.text) ?? 0;
                 final discAmt = price * qty * (discP / 100);
                 final taxAmt = (price * qty - discAmt) * (taxP / 100);
-                final subtotal = price * qty - discAmt + taxAmt;
+                // subtotal = line total after item-level discount, before item-level tax
+                final itemSubtotal = price * qty - discAmt;
 
                 setState(() {
                   _items.add(InvoiceItem(
@@ -400,7 +406,7 @@ class _InvoiceFormPageState extends ConsumerState<InvoiceFormPage> {
                     discountAmount: discAmt,
                     taxPercent: taxP,
                     taxAmount: taxAmt,
-                    subtotal: subtotal,
+                    subtotal: itemSubtotal,
                   ));
                 });
                 Navigator.pop(context);
@@ -469,7 +475,7 @@ class _InvoiceFormPageState extends ConsumerState<InvoiceFormPage> {
         status: 'draft',
         invoiceDate: _invoiceDate,
         dueDate: _dueDate,
-        subtotal: _subtotal,
+        subtotal: _itemSubtotals,
         discountPercent: _discountPercent,
         discountAmount: _discountAmount,
         taxPercent: _taxPercent,

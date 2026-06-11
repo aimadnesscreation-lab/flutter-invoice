@@ -6,4 +6,5 @@ abstract class SupplierRepository {
   Future<Supplier> createSupplier(Supplier supplier);
   Future<Supplier> updateSupplier(Supplier supplier);
   Future<void> deleteSupplier(String id);
+  Future<void> restoreSupplier(String id);
 }
