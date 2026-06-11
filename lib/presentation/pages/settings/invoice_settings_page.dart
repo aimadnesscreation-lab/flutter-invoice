@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:invoice_pro/core/di/providers.dart';
+import 'package:invoice_pro/core/utils/validators.dart';
 
 class InvoiceSettingsPage extends ConsumerStatefulWidget {
   const InvoiceSettingsPage({super.key});
@@ -25,6 +26,7 @@ class _InvoiceSettingsPageState extends ConsumerState<InvoiceSettingsPage> {
   static const String _keyReminderDays = 'invoice_reminder_days';
   static const String _keyAutoEmail = 'invoice_auto_email';
 
+  final _formKey = GlobalKey<FormState>();
   String _selectedPaymentTerms = 'net_30';
   int _dueDateOffset = 30;
   bool _autoEmailOnCreate = false;
@@ -95,11 +97,13 @@ class _InvoiceSettingsPageState extends ConsumerState<InvoiceSettingsPage> {
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+      body: Form(
+        key: _formKey,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
             Text('Payment Terms', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 16),
             DropdownButtonFormField<String>(
@@ -143,12 +147,13 @@ class _InvoiceSettingsPageState extends ConsumerState<InvoiceSettingsPage> {
             TextFormField(
               controller: _dueDateController,
               decoration: const InputDecoration(
-                labelText: 'Due Date Offset (days)',
+                labelText: 'Due Date Offset (days) *',
                 prefixIcon: Icon(Icons.calendar_today),
                 helperText: 'Days from invoice date to due date',
               ),
               keyboardType: TextInputType.number,
               onChanged: (v) => _dueDateOffset = int.tryParse(v) ?? 30,
+              validator: (v) => Validators.positiveNumber(v, fieldName: 'Due Date Offset'),
             ),
             const SizedBox(height: 24),
 
@@ -179,19 +184,21 @@ class _InvoiceSettingsPageState extends ConsumerState<InvoiceSettingsPage> {
               TextFormField(
                 controller: _lateFeeController,
                 decoration: const InputDecoration(
-                  labelText: 'Late Fee (%)',
+                  labelText: 'Late Fee (%) *',
                   prefixIcon: Icon(Icons.percent),
                 ),
                 keyboardType: TextInputType.number,
+                validator: (v) => Validators.positiveNumber(v, fieldName: 'Late Fee'),
               ),
               const SizedBox(height: 12),
               TextFormField(
                 controller: _reminderController,
                 decoration: const InputDecoration(
-                  labelText: 'Reminder (days after due date)',
+                  labelText: 'Reminder (days after due date) *',
                   prefixIcon: Icon(Icons.notifications),
                 ),
                 keyboardType: TextInputType.number,
+                validator: (v) => Validators.positiveNumber(v, fieldName: 'Reminder Days'),
               ),
             ],
             const SizedBox(height: 24),
@@ -208,10 +215,12 @@ class _InvoiceSettingsPageState extends ConsumerState<InvoiceSettingsPage> {
           ],
         ),
       ),
+    ),
     );
   }
 
   Future<void> _saveSettings() async {
+    if (!_formKey.currentState!.validate()) return;
     setState(() => _isSaving = true);
     try {
       final repo = ref.read(settingsRepositoryProvider);
