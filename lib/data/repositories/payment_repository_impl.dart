@@ -112,6 +112,36 @@ class PaymentRepositoryImpl implements PaymentRepository {
   }
 
   @override
+  Future<String> generatePaymentNumber(String businessId, String prefix) async {
+    return await _db.transaction(() async {
+      final query = _db.select(_db.invoiceNumbering)
+        ..where((t) => t.businessId.equals(businessId))
+        ..where((t) => t.type.equals('payment'))
+        ..where((t) => t.prefix.equals(prefix));
+      
+      final existing = await query.getSingleOrNull();
+      int nextNumber = 1;
+
+      if (existing != null) {
+        nextNumber = existing.lastNumber + 1;
+        await (_db.invoiceNumbering.update()..where((t) => t.id.equals(existing.id))).write(
+          InvoiceNumberingCompanion(lastNumber: Value(nextNumber))
+        );
+      } else {
+        await _db.into(_db.invoiceNumbering).insert(InvoiceNumberingCompanion.insert(
+          id: const Uuid().v4(),
+          businessId: businessId,
+          prefix: prefix,
+          type: 'payment',
+          lastNumber: Value(nextNumber),
+        ));
+      }
+
+      return '$prefix${nextNumber.toString().padLeft(6, '0')}';
+    });
+  }
+
+  @override
   Future<void> deletePayment(String id) async {
     await (_db.payments.delete()
       ..where((t) => t.id.equals(id))).go();

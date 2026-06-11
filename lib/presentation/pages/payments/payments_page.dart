@@ -153,10 +153,11 @@ class _PaymentsPageState extends ConsumerState<PaymentsPage> {
                     if (businessId.isEmpty) return;
 
                     final repo = ref.read(paymentRepositoryProvider);
+                    final paymentNumber = await repo.generatePaymentNumber(businessId, 'PAY-');
                     await repo.createPayment(Payment(
                       id: const Uuid().v4(),
                       businessId: businessId,
-                      paymentNumber: 'PAY-${DateTime.now().millisecondsSinceEpoch}',
+                      paymentNumber: paymentNumber,
                       amount: amount,
                       method: selectedMethod,
                       reference: refController.text.trim().isEmpty ? null : refController.text.trim(),

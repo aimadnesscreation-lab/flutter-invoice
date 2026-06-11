@@ -9,6 +9,8 @@ import 'package:invoice_pro/presentation/pages/invoices/invoices_page.dart';
 import 'package:invoice_pro/presentation/pages/invoices/invoice_detail_page.dart';
 import 'package:invoice_pro/presentation/pages/invoices/invoice_form_page.dart';
 import 'package:invoice_pro/presentation/pages/estimates/estimates_page.dart';
+import 'package:invoice_pro/presentation/pages/estimates/estimate_form_page.dart';
+import 'package:invoice_pro/presentation/pages/estimates/estimate_detail_page.dart';
 import 'package:invoice_pro/presentation/pages/payments/payments_page.dart';
 import 'package:invoice_pro/presentation/pages/expenses/expenses_page.dart';
 import 'package:invoice_pro/presentation/pages/reports/reports_page.dart';
@@ -97,6 +99,27 @@ final appRouter = GoRouter(
           path: '/estimates',
           name: 'estimates',
           builder: (context, state) => const EstimatesPage(),
+          routes: [
+            GoRoute(
+              path: 'create',
+              name: 'estimateCreate',
+              builder: (context, state) => const EstimateFormPage(),
+            ),
+            GoRoute(
+              path: ':id',
+              name: 'estimateDetail',
+              builder: (context, state) => EstimateDetailPage(
+                estimateId: state.pathParameters['id']!,
+              ),
+            ),
+            GoRoute(
+              path: ':id/edit',
+              name: 'estimateEdit',
+              builder: (context, state) => EstimateFormPage(
+                estimateId: state.pathParameters['id'],
+              ),
+            ),
+          ],
         ),
         GoRoute(
           path: '/payments',

@@ -8,4 +8,5 @@ abstract class PaymentRepository {
   Future<double> getTotalPayments(String businessId);
   Future<double> getInvoicePaidAmount(String invoiceId);
   Future<List<Payment>> getPaymentsByInvoiceId(String invoiceId);
+  Future<String> generatePaymentNumber(String businessId, String prefix);
 }
