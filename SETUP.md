@@ -62,6 +62,24 @@ flutter --version
 
 You should see version info (3.44.0).
 
+### Verify Java version
+
+This project requires Java 17. Check your version:
+
+```bash
+java -version
+```
+
+You should see something like `openjdk version "17.0.x"`. If you have a different version:
+
+```bash
+# List available Java versions
+sudo update-alternatives --config java
+
+# Or install Java 17 if not present
+sudo apt install openjdk-17-jdk
+```
+
 ---
 
 ## Step 2: Install Android SDK (Lightweight — No Android Studio)
@@ -89,13 +107,13 @@ rm commandlinetools-linux-11076708_latest.zip
 cd ~/Android/Sdk/cmdline-tools/latest/bin
 
 # Install platform tools (adb), SDK platform, and build tools
-./sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+./sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0"
 ```
 
 > **What this installs:**
 > - `platform-tools` (~6 MB) — contains `adb` for USB installs
-> - `platforms;android-34` — SDK platform to compile against
-> - `build-tools;34.0.0` — tools needed for the build
+> - `platforms;android-36` — SDK platform to compile against (this project requires SDK 36+)
+> - `build-tools;36.0.0` — tools needed for the build
 
 ### Accept licenses
 
@@ -140,7 +158,7 @@ You should see something like:
 ```
 Doctor summary (to see all details, run flutter doctor -v):
 [✓] Flutter (Channel stable, 3.44.0, on Linux)
-[✓] Android toolchain - develop for Android devices (Android SDK version 34.0.0)
+[✓] Android toolchain - develop for Android devices (Android SDK version 36.0.0)
 [!] Chrome - develop for the web
 [✓] Android Studio (not used)
 [✓] Connected device (1 available)
@@ -148,6 +166,16 @@ Doctor summary (to see all details, run flutter doctor -v):
 
 The `[!] Chrome` warning is fine — we're building for Android, not web.
 The `Android Studio (not used)` is expected since we installed only the CLI tools.
+
+### If Flutter doesn't detect the Android SDK
+
+If `flutter doctor` shows `[!] Android toolchain` with "Unable to locate Android SDK", explicitly tell Flutter where to find it:
+
+```bash
+flutter config --android-sdk $HOME/Android/Sdk
+```
+
+Then run `flutter doctor` again.
 
 ---
 
