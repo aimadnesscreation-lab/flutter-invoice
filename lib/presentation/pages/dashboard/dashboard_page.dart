@@ -192,7 +192,7 @@ class DashboardPage extends ConsumerWidget {
                   gridData: FlGridData(
                     show: true,
                     drawVerticalLine: false,
-                    horizontalInterval: (stats['yearly_revenue'] as double? ?? 1000) / 4,
+                    horizontalInterval: ((stats['yearly_revenue'] as double?) ?? 1000).clamp(100, double.infinity) / 4,
                   ),
                   borderData: FlBorderData(show: false),
                   barTouchData: BarTouchData(enabled: true),
