@@ -5,8 +5,6 @@ allprojects {
     }
 }
 
-rootProject.extra.set("flutter.compileSdkVersion", 36)
-
 val newBuildDir: Directory =
     rootProject.layout.buildDirectory
         .dir("../../build")
